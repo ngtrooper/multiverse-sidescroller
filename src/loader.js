@@ -5,7 +5,9 @@
 window.CharacterLoader = {
   async loadParty(want) {
     const j = (u) => fetch(u, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); });
-    const [roster, db] = await Promise.all([j('data/roster.json'), j('data/heroes.json')]);
+    const [roster, db, enemies] = await Promise.all([j('data/roster.json'), j('data/heroes.json'), j('data/enemies.json')]);
+    enemies.meta = await j(enemies.sprite.meta);
+    enemies.dir = enemies.sprite.meta.replace(/[^/]*$/, '');
     const party = await Promise.all(roster.heroes.map(async entry => {
       const stats = db.heroes.find(h => h.Name === entry.name);
       if (!stats) throw new Error('hero not in heroes.json: ' + entry.name);
@@ -19,15 +21,19 @@ window.CharacterLoader = {
         sprite: { dir: entry.sprite.meta.replace(/[^/]*$/, ''), scale: entry.sprite.scale || 1, body: entry.sprite.body, attackArtFacesLeft: !!entry.sprite.attackArtFacesLeft,
           muzzle: entry.sprite.muzzle, muzzleAlt: entry.sprite.muzzleAlt, jets: entry.sprite.jets, meta },
         move: entry.move, attack: entry.attack, fx: entry.fx, ui: entry.ui, momentum: entry.momentum,
-        flight: entry.flight, ranged: entry.ranged, burn: entry.burn, poison: entry.poison,
+        flight: entry.flight, ranged: entry.ranged, burn: entry.burn, poison: entry.poison, drones: entry.drones, partyBuff: entry.partyBuff,
         floorVine: entry.floorVine ? { ...entry.floorVine, dir: entry.floorVine.meta.replace(/[^/]*$/, ''), meta: await j(entry.floorVine.meta) } : undefined,
       };
     }));
+    // party-wide passives (Robot's Logic Engine: +15% ATK to every party member while he is in the party; additive, like Heroes Idle's partyPassiveBonus)
+    const buffs = party.filter(h => h.partyBuff && h.partyBuff.atkPct);
+    const atkPct = buffs.reduce((t, h) => t + h.partyBuff.atkPct, 0);
+    for (const h of party) { h.stats.baseAtk = h.stats.atk; h.stats.atk = Math.round(h.stats.atk * (1 + atkPct)); h.partyBuffs = buffs.map(b => ({ by: b.key, ...b.partyBuff })); }
     // ?hero= matches name or key, case/space-insensitive, then by substring (IronMan, ironman, Iron%20Man, flash ...)
     const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
     const w = norm(want || roster.default);
     let idx = party.findIndex(h => norm(h.name) === w || h.key === w);
     if (idx < 0) idx = party.findIndex(h => norm(h.name).includes(w));
-    return { party, idx: Math.max(0, idx) };
+    return { party, idx: Math.max(0, idx), enemies };
   }
 };

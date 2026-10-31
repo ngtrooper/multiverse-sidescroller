@@ -1,7 +1,10 @@
 // Rift Runners — test stage. Phaser 3 (vendored), arcade physics.
 // World is laid out in 640x360 "world px"; the canvas is 2x (1280x720) and the camera zooms 2x, so the
 // HD hero sprites (drawn at 0.5 scale) show 1 texel = 1 screen px while the world tiles stay chunky 2x.
-// Party: every roster hero is loaded; Tab / 1-4 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Party: every roster hero is loaded; Tab / 1-5 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Enemies: Hydra Grunts / Elites (data/enemies.json) march in, hold a 250-300 px standoff and fire 3-round bursts of
+// dodgeable energy bolts; drones swoop. Robot (hero 5) shoots an arm blaster, K/X deploys 2 auto-firing drones,
+// and his Logic Engine passive (+15% ATK to the whole party) is applied in loader.js.
 // Flying heroes (roster.flight, e.g. Iron Man) ignore gravity and move 8-way; ranged heroes fire projectiles with Burn DoT.
 // roster.poison (Poison Ivy's Toxic): 50% per hit to add an uncapped Poison stack, each ticking 2% of the enemy's max HP per second.
 const VW = 640, VH = 360, GROUND_Y = 316, WORLD_W = 3600, ZOOM = 2;
@@ -12,6 +15,8 @@ class GameScene extends Phaser.Scene {
   constructor() { super('game'); }
   init(data) {
     this.party = data.party; this.idx = data.idx || 0; this.hero = this.party[this.idx];
+    if (data.enemies) GameScene.E = data.enemies;   // enemy archetypes + Hydra sprite meta (kept across restarts)
+    this.E = GameScene.E;
     this.rebirths = data.rebirths || 0; this.msg = null; this.dashFx = false;
   }
   preload() {
@@ -19,7 +24,7 @@ class GameScene extends Phaser.Scene {
       const m = h.sprite.meta;
       for (const [name, a] of Object.entries(m.animations))
         if (!this.textures.exists(`${h.key}_${name}`))
-          this.load.spritesheet(`${h.key}_${name}`, h.sprite.dir + a.sheet, { frameWidth: m.frameWidth, frameHeight: m.frameHeight });
+          this.load.spritesheet(`${h.key}_${name}`, h.sprite.dir + a.sheet, { frameWidth: a.frameWidth || m.frameWidth, frameHeight: a.frameHeight || m.frameHeight });
       if (!this.textures.exists(`portrait_${h.key}`)) this.load.image(`portrait_${h.key}`, h.portrait);
       if (h.floorVine && !this.textures.exists(`${h.key}_floorvine`)) {   // Poison Ivy: Thorn Eruption FX sheet
         const V = h.floorVine.meta;
@@ -28,8 +33,22 @@ class GameScene extends Phaser.Scene {
       if (h.ranged && !this.textures.exists(`${h.key}_bolt`)) {
         this.load.spritesheet(`${h.key}_bolt`, h.sprite.dir + 'repulsor.png', { frameWidth: 56, frameHeight: 24 });
         this.load.spritesheet(`${h.key}_bolthit`, h.sprite.dir + 'repulsor_hit.png', { frameWidth: 40, frameHeight: 40 });
-        if (!this.textures.exists('burn')) this.load.spritesheet('burn', h.sprite.dir + 'burn.png', { frameWidth: 16, frameHeight: 20 });
+        if (h.burn && !this.textures.exists('burn')) this.load.spritesheet('burn', h.sprite.dir + 'burn.png', { frameWidth: 16, frameHeight: 20 });
       }
+      if (h.drones && !this.textures.exists(`${h.key}_drone`)) {   // Robot: support drones + their laser
+        this.load.spritesheet(`${h.key}_drone`, h.sprite.dir + h.drones.sheet, { frameWidth: 40, frameHeight: 28 });
+        this.load.image(`${h.key}_dlaser`, h.sprite.dir + h.drones.laser);
+      }
+    }
+    // Hydra Grunt / Elite (palette swap): one sheet per anim, death has its own frame box
+    const E = this.E, M = E.meta;
+    for (const t of Object.values(E.types)) for (const [name, a] of Object.entries(M.animations)) {
+      const k = `${t.sheetPrefix}_${name}`;
+      if (!this.textures.exists(k)) this.load.spritesheet(k, E.dir + a.sheet.replace(/^hydra_/, t.sheetPrefix + '_'), { frameWidth: a.frameWidth || M.frameWidth, frameHeight: a.frameHeight || M.frameHeight });
+    }
+    if (!this.textures.exists('hydra_bolt')) {
+      this.load.spritesheet('hydra_bolt', E.bolt.sheet, { frameWidth: E.bolt.frameWidth, frameHeight: E.bolt.frameHeight });
+      this.load.spritesheet('hydra_flash', E.bolt.flash, { frameWidth: E.bolt.flashSize, frameHeight: E.bolt.flashSize });
     }
   }
   A(name, h = this.hero) { return `${h.key}:${name}`; }
@@ -95,26 +114,33 @@ class GameScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ allowGravity: true });
     this.anims.create({ key: 'oni_walk', frames: this.anims.generateFrameNumbers('oni', { frames: [0, 1] }), frameRate: 5, repeat: -1 });
     this.anims.create({ key: 'drone_fly', frames: this.anims.generateFrameNumbers('drone', { frames: [0, 1] }), frameRate: 10, repeat: -1 });
-    [[620, 'oni'], [980, 'drone'], [1140, 'drone', 150], [1400, 'oni'], [1750, 'oni'], [1900, 'drone'], [2120, 'drone', 140], [2400, 'oni'],
-     [2600, 'drone'], [2820, 'drone', 130], [3000, 'oni'], [3150, 'drone']]
+    this.makeEnemyAnims();
+    this.ebolts = this.physics.add.group({ allowGravity: false });
+    // Hydra Grunts replace the old placeholder oni on the ground; two Elites guard the back half. Drones unchanged.
+    [[620, 'hydra'], [980, 'drone'], [1140, 'drone', 150], [1400, 'hydra'], [1750, 'hydra'], [1900, 'drone'], [2120, 'drone', 140], [2400, 'elite'],
+     [2600, 'drone'], [2820, 'drone', 130], [3000, 'hydra'], [3200, 'elite']]
       .forEach(([x, t, y]) => this.spawn(t, x, y));
     this.physics.add.collider(this.enemies, this.solids);
     this.physics.add.overlap(this.player, this.enemies, (p, e) => this.touchEnemy(e));
     this.physics.add.overlap(this.bolts, this.enemies, (b, e) => this.boltHit(b, e));
     this.physics.add.collider(this.bolts, this.solids, (b) => this.boltPop(b));
+    this.physics.add.overlap(this.player, this.ebolts, (p, b) => this.enemyBoltHit(b));
+    this.physics.add.collider(this.ebolts, this.solids, (b) => this.enemyBoltPop(b));
+    this.dbolts = this.physics.add.group({ allowGravity: false }); this.drones = [];
+    this.physics.add.overlap(this.dbolts, this.enemies, (b, e) => this.droneBoltHit(b, e));
 
     // ---- camera / input / hud ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 40).setDeadzone(60, 40);
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR');
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR,FIVE');
     this.input.keyboard.addCapture('SPACE,UP,DOWN,LEFT,RIGHT,TAB');
     this.buf = { jump: 0, atk: 0 };
     const kb = this.input.keyboard;
     ['SPACE', 'UP', 'W'].forEach(k => kb.on('keydown-' + k, () => this.buf.jump = 0.12));
     ['J', 'Z'].forEach(k => kb.on('keydown-' + k, () => this.buf.atk = 0.15));
     kb.on('keydown-TAB', () => this.swapTo((this.idx + 1) % this.party.length));
-    ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
     kb.on('keydown-F', () => this.flashpoint());
-    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castVine()));   // Poison Ivy: Thorn Eruption
+    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castSpecial()));   // Ivy: Thorn Eruption · Robot: drones
     this.makeHud();
     if (this.rebirths) {
       this.msg.setText(`FLASHPOINT #${this.rebirths}\ntimeline rewritten`);
@@ -156,8 +182,25 @@ class GameScene extends Phaser.Scene {
       const k1 = `${h.key}:bolt`, k2 = `${h.key}:bolthit`;
       if (!this.anims.exists(k1)) this.anims.create({ key: k1, frames: this.anims.generateFrameNumbers(`${h.key}_bolt`, { start: 0, end: 3 }), frameRate: 16, repeat: -1 });
       if (!this.anims.exists(k2)) this.anims.create({ key: k2, frames: this.anims.generateFrameNumbers(`${h.key}_bolthit`, { start: 0, end: 3 }), frameRate: 20, repeat: 0 });
-      if (!this.anims.exists('burn')) this.anims.create({ key: 'burn', frames: this.anims.generateFrameNumbers('burn', { start: 0, end: 5 }), frameRate: 14, repeat: -1 });
+      if (h.burn && !this.anims.exists('burn')) this.anims.create({ key: 'burn', frames: this.anims.generateFrameNumbers('burn', { start: 0, end: 5 }), frameRate: 14, repeat: -1 });
     }
+  }
+
+  makeEnemyAnims() {
+    const E = this.E, M = E.meta;
+    for (const t of Object.values(E.types)) for (const [name, a] of Object.entries(M.animations)) {
+      const key = `${t.sheetPrefix}:${name}`; if (this.anims.exists(key)) continue;
+      let frames = this.anims.generateFrameNumbers(`${t.sheetPrefix}_${name}`, { start: 0, end: a.frames - 1 }), fps = a.fps;
+      if (a.durationsMs) { frames = frames.map((f, i) => ({ ...f, duration: a.durationsMs[i] - 1 })); fps = 1000; }
+      if (name === 'walk') fps = t.walkSpeed * a.frames / t.walkCyclePx;   // feet don't slide at walkSpeed (timeScale follows |vx|)
+      this.anims.create({ key, frames, frameRate: fps, repeat: a.loop ? -1 : 0 });
+    }
+    if (!this.anims.exists('hydra:bolt')) {
+      this.anims.create({ key: 'hydra:bolt', frames: this.anims.generateFrameNumbers('hydra_bolt', { start: 0, end: 3 }), frameRate: 16, repeat: -1 });
+      this.anims.create({ key: 'hydra:flash', frames: this.anims.generateFrameNumbers('hydra_flash', { start: 0, end: 3 }), frameRate: 30, repeat: 0 });
+    }
+    for (const h of this.party) if (h.drones && !this.anims.exists(`${h.key}:drone`))
+      this.anims.create({ key: `${h.key}:drone`, frames: this.anims.generateFrameNumbers(`${h.key}_drone`, { start: 0, end: 3 }), frameRate: 14, repeat: -1 });
   }
 
   // put the current hero's textures / origin / hitbox on the shared player body
@@ -189,7 +232,19 @@ class GameScene extends Phaser.Scene {
 
   spawn(type, x, y = 190) {
     let e;
-    if (type === 'oni') {
+    if (type === 'hydra' || type === 'elite') {
+      const T = this.E.types[type], M = this.E.meta, B = this.E.sprite.body, sc = this.E.sprite.scale;
+      e = this.enemies.create(x, GROUND_Y, `${T.sheetPrefix}_idle`, 0).setOrigin(M.anchor.x, (M.anchor.footRow + 1) / M.frameHeight).setScale(sc);
+      e.body.setSize(B.width, B.height).setOffset(M.frameWidth * M.anchor.x - B.width / 2, M.anchor.footRow + 1 - B.height);
+      e.play(`${T.sheetPrefix}:idle`);
+      Object.assign(e, { kind: 'hydra', T, pre: T.sheetPrefix, hp: T.hp, maxHp: T.hp, atk: T.contact, speed: T.walkSpeed, dir: -1, home: x, range: T.patrolPx,
+        cd: 0.6 + Math.random() * 0.8, shooting: false, hurtT: 0 });
+      e.on('animationupdate', (a, f) => { if (a.key === `${e.pre}:attack` && M.animations.attack.fireFrames.includes(f.index - 1)) this.enemyFire(e); });
+      e.on('animationcomplete', (a) => {
+        if (a.key === `${e.pre}:attack`) { e.shooting = false; e.cd = T.cooldownMs / 1000 * Phaser.Math.FloatBetween(0.85, 1.15); }
+        if (a.key === `${e.pre}:hurt`) e.hurtT = 0;
+      });
+    } else if (type === 'oni') {
       e = this.enemies.create(x, GROUND_Y - 70, 'oni', 0).setScale(2.5).play('oni_walk');
       e.body.setSize(22, 36).setOffset(4, 2);
       Object.assign(e, { kind: 'oni', hp: 2400, maxHp: 2400, atk: 140, speed: 34, dir: -1, home: x, range: 120 });
@@ -220,8 +275,10 @@ class GameScene extends Phaser.Scene {
       color: i === this.idx ? '#ffe14a' : '#8a80a8', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.msg = this.msg && this.msg.text ? this.add.text(VW / 2, 120, this.msg.text, this.msgStyle()) : this.add.text(VW / 2, 120, '', this.msgStyle());
     this.msg.setOrigin(0.5);
-    this.vineT = h.floorVine ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // Thorn Eruption cooldown
-    this.hud.add([g, por, name, this.subT, this.hpG, this.hpT, ...strip, this.msg, ...(this.vineT ? [this.vineT] : [])]);
+    this.vineT = (h.floorVine || h.drones) ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // K special cooldown
+    const buffs = (h.partyBuffs || []).map(b => this.add.text(6 + this.party.length * 70, 60, `${b.name.toUpperCase()} +${Math.round(b.atkPct * 100)}% ATK`,
+      { fontFamily: 'monospace', fontSize: '8px', color: '#ffb46a', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
+    this.hud.add([g, por, name, this.subT, this.hpG, this.hpT, ...strip, ...buffs, this.msg, ...(this.vineT ? [this.vineT] : [])]);
     this.hpShown = this.st.hp;
   }
   msgStyle() { return { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff', align: 'center', stroke: '#1a0f2a', strokeThickness: 4 }; }
@@ -235,8 +292,10 @@ class GameScene extends Phaser.Scene {
     g.fillStyle(col).fillRect(x, y, w * f, 8);
     g.fillStyle(0xffffff, 0.35).fillRect(x, y, w * f, 2);
     this.hpT.setText(`HP ${Math.max(0, Math.ceil(st.hp))}/${st.maxHp}`);
-    this.subT.setText(`${h.faction} · ATK ${h.stats.atk} · CRIT ${Math.round(this.critChance() * 100)}%`);
-    if (this.vineT) { const cd = st.vineCd; this.vineT.setText(cd > 0 ? `K VINE ${cd.toFixed(1)}s` : 'K VINE READY').setColor(cd > 0 ? '#5f7f5a' : '#7dff6a'); }
+    this.subT.setText(`${h.faction} · ATK ${h.stats.atk}${h.stats.atk > h.stats.baseAtk ? '+' : ''} · CRIT ${Math.round(this.critChance() * 100)}%`);
+    if (this.vineT && h.drones) { const cd = st.droneCd || 0, up = this.drones.length;
+      this.vineT.setText(up ? `DRONES ${Math.max(0, this.drones[0].t).toFixed(1)}s` : cd > 0 ? `K DRONES ${cd.toFixed(1)}s` : 'K DRONES READY').setColor(up ? '#ffb46a' : cd > 0 ? '#7a6a5a' : '#9dff7a'); }
+    else if (this.vineT) { const cd = st.vineCd; this.vineT.setText(cd > 0 ? `K VINE ${cd.toFixed(1)}s` : 'K VINE READY').setColor(cd > 0 ? '#5f7f5a' : '#7dff6a'); }
   }
 
   // ---------------- combat ----------------
@@ -247,26 +306,37 @@ class GameScene extends Phaser.Scene {
     if (an.hitPerActiveFrame) st.hitSet = new Set();   // multi-hit combo: each active frame can hit once
     const x0 = st.facing > 0 ? p.x - 6 : p.x - A.reach, rect = new Phaser.Geom.Rectangle(x0, p.y - A.height, A.reach + 6, A.height + 4);
     this.enemies.getChildren().forEach(e => {
-      if (!e.active || st.hitSet.has(e)) return;
+      if (!e.active || e.dying || st.hitSet.has(e)) return;
       if (Phaser.Geom.Intersects.RectangleToRectangle(rect, e.getBounds())) { st.hitSet.add(e); this.damageEnemy(e); }
     });
   }
   damageEnemy(e, o = {}) {
+    if (!e.active || e.dying) return;
     const s = this.hero.stats, crit = Math.random() < this.critChance();
     const dmg = Math.round(s.atk * s.baseDmgPct * (o.mult || 1) * (crit ? s.critDmg : 1) * Phaser.Math.FloatBetween(0.9, 1.1));
     if (this.hero.momentum) this.st.momentum++;
     e.hp -= dmg; e.stun = o.stun ?? 0.25;
     const kb = o.knockback ?? this.hero.attack.knockback, dir = o.dir || this.st.facing;
     e.setVelocityX(dir * kb); if (e.kind === 'oni' && !o.ranged) e.setVelocityY(-120);
-    e.anims.pause(); e.setFrame(2);
+    if (e.kind === 'hydra' && o.quiet) { e.setTintFill(0xd8ffd0); this.time.delayedCall(50, () => e.active && e.clearTint()); }   // drone laser: no flinch
+    else if (e.kind === 'hydra') {   // flinch: interrupts a burst, the next one comes after a short reset
+      if (e.shooting) { e.shooting = false; e.cd = Math.max(e.cd, 0.7); }
+      e.play(`${e.pre}:hurt`, true); e.hurtT = 0.5;
+    } else { e.anims.pause(); e.setFrame(2); }
     if (this.hero.burn) this.addBurn(e, crit ? 2 : 1);   // Mark VII: Burn on every hit, +1 stack on crit
     if (this.hero.poison && (o.poison || (!o.noToxicRoll && Math.random() < this.hero.poison.chance))) this.addPoison(e);   // Poison Ivy: Toxic
-    this.popText(e.x, e.y - 26, (crit ? '⚡' : '') + dmg, crit ? '#ffe14a' : '#ffffff', crit ? 14 : 11);
-    this.sparks(e.x, e.y - 8, this.hero.ui?.spark ?? (crit ? 0x7ff0ff : 0xffffff), crit ? 10 : 6);
-    this.cameras.main.shake(o.ranged ? 40 : 60, crit ? 0.005 : o.ranged ? 0.0015 : 0.003);
-    this.hitstop(crit ? (o.ranged ? 40 : 70) : this.hero.attack.hitstopMs ?? 45);
+    const cy = this.cy(e);
+    this.popText(e.x, cy - 26, (crit ? '⚡' : '') + dmg, crit ? '#ffe14a' : '#ffffff', crit ? 14 : 11);
+    this.sparks(e.x, cy - 8, this.hero.ui?.spark ?? (crit ? 0x7ff0ff : 0xffffff), crit ? 10 : 6);
+    if (!o.quiet) {   // drone lasers don't shake / freeze the screen
+      this.cameras.main.shake(o.ranged ? 40 : 60, crit ? 0.005 : o.ranged ? 0.0015 : 0.003);
+      this.hitstop(crit ? (o.ranged ? 40 : 70) : this.hero.attack?.hitstopMs ?? 45);
+    }
     if (e.hp <= 0) this.killEnemy(e);
   }
+  cy(e) { return e.body ? e.body.center.y : e.y; }   // enemy body centre (Hydra sprites are anchored at the feet)
+  top(e) { return e.kind === 'hydra' ? e.y - this.E.sprite.body.height * e.scaleY : e.y - e.displayHeight / 2; }
+  castSpecial() { if (this.hero.floorVine) this.castVine(); else if (this.hero.drones) this.deployDrones(); }
   // ---- Poison Ivy: Thorn Eruption (K / X) — a thorny vine bursts from the floor under the nearest enemy in range ----
   groundAt(x) {   // nearest x with floor under it (the stage has two pits)
     const gaps = [[1100, 1180], [2080, 2170]];
@@ -277,7 +347,7 @@ class GameScene extends Phaser.Scene {
     const h = this.hero, V = h.floorVine, st = this.st, p = this.player;
     if (!V || st.dead || st.won || st.special || st.vineCd > 0) return;
     let best = null, bd = V.rangePx;
-    this.enemies.getChildren().forEach(e => { if (!e.active || !e.body) return; const d = Math.abs(e.x - p.x); if (d <= bd && Math.abs(e.y - p.y) < 220) { bd = d; best = e; } });
+    this.enemies.getChildren().forEach(e => { if (!e.active || !e.body || e.dying) return; const d = Math.abs(e.x - p.x); if (d <= bd && Math.abs(e.y - p.y) < 220) { bd = d; best = e; } });
     if (best) { st.facing = best.x < p.x ? -1 : 1; p.setFlipX(st.facing < 0); }
     const dir = st.facing, x = this.groundAt(best ? best.x : p.x + dir * V.fallbackPx), y = GROUND_Y;
     st.vineCd = V.cooldownMs / 1000; this.vineCasts = (this.vineCasts || 0) + 1;
@@ -300,13 +370,13 @@ class GameScene extends Phaser.Scene {
     const top = GROUND_Y - A.heightPx[i] * sc, reach = Math.max(V.widthPx / 2, A.reachPx[i] * sc);
     const x0 = vs.dir > 0 ? vs.x - V.widthPx / 2 : vs.x - reach, rect = new Phaser.Geom.Rectangle(x0, top, V.widthPx / 2 + reach, GROUND_Y - top);
     this.enemies.getChildren().forEach(e => {
-      if (!e.active || !e.body || vs.hit.has(e)) return;
+      if (!e.active || !e.body || e.dying || vs.hit.has(e)) return;
       if (!Phaser.Geom.Intersects.RectangleToRectangle(rect, e.getBounds())) return;
       vs.hit.add(e); this.vineHits = (this.vineHits || 0) + 1;
       const cur = this.hero; this.hero = vs.caster;   // a vine cast before a tag-swap still uses Ivy's stats + Toxic
       try { this.damageEnemy(e, { mult: V.damagePct, knockback: V.knockback, dir: vs.dir, stun: V.stun, poison: V.guaranteedPoison, noToxicRoll: true }); }
       finally { this.hero = cur; }
-      if (e.active && e.kind === 'oni') e.setVelocityY(-260);   // tossed up by the eruption
+      if (e.active && e.body && (e.kind === 'oni' || e.kind === 'hydra')) e.setVelocityY(-260);   // tossed up by the eruption
     });
   }
   // ---- ranged: repulsor bolts + Burn DoT ----
@@ -317,7 +387,7 @@ class GameScene extends Phaser.Scene {
     // light aim assist: the palm sits at head height, so bolts bend toward the nearest enemy in a forward cone (±R.aimDeg)
     let ang = f > 0 ? 0 : Math.PI, best = 1e9;
     this.enemies.getChildren().forEach(e => {
-      if (!e.active) return;
+      if (!e.active || e.dying) return;
       const ex = e.x - x, ey = e.body.center.y - y, d = Math.hypot(ex, ey);
       if (ex * f <= 10 || d > R.rangePx || d >= best) return;
       const a = Math.atan2(ey, ex * f); if (Math.abs(a) > Phaser.Math.DegToRad(R.aimDeg)) return;
@@ -350,21 +420,21 @@ class GameScene extends Phaser.Scene {
       e.flame = this.add.sprite(e.x, e.y, 'burn', 0).setScale(0.75).setDepth(6).play('burn');
     }
     e.burn.stacks = Math.min(B.maxStacks, e.burn.stacks + n); e.burn.t = B.durationMs / 1000;
-    this.popText(e.x + 14, e.y - 40, `BURN x${e.burn.stacks}`, '#ff9a3c', 8);
+    this.popText(e.x + 14, this.cy(e) - 40, `BURN x${e.burn.stacks}`, '#ff9a3c', 8);
   }
   updateBurn(e, dt) {
     const u = e.burn; if (!u) return;
     u.t -= dt; u.tick -= dt;
-    e.flame.setPosition(e.x + Math.sin(this.time.now / 90) * 2, e.y - e.displayHeight / 2 + 2).setScale(0.6 + 0.08 * u.stacks);
+    e.flame.setPosition(e.x + Math.sin(this.time.now / 90) * 2, this.top(e) + 2).setScale(0.6 + 0.08 * u.stacks);
     if (Math.random() < dt * (4 + u.stacks * 3)) {   // embers
-      const s = this.add.image(e.x + Phaser.Math.Between(-10, 10), e.y + Phaser.Math.Between(-12, 8), 'px').setTint(Math.random() < 0.5 ? 0xff8a1e : 0xffd23f).setDepth(6);
+      const s = this.add.image(e.x + Phaser.Math.Between(-10, 10), this.cy(e) + Phaser.Math.Between(-12, 8), 'px').setTint(Math.random() < 0.5 ? 0xff8a1e : 0xffd23f).setDepth(6);
       this.tweens.add({ targets: s, y: s.y - 16 - Math.random() * 10, alpha: 0, duration: 420, onComplete: () => s.destroy() });
     }
     if (u.tick <= 0) {
       u.tick += u.B.tickMs / 1000;
       const d = Math.max(1, Math.round(u.atk * u.B.pctAtkPerTick * u.stacks));
       e.hp -= d; e.setTintFill(0xff8a3c); this.time.delayedCall(60, () => e.active && e.clearTint());
-      this.popText(e.x + Phaser.Math.Between(-8, 8), e.y - 18, '' + d, '#ff8a3c', 9);
+      this.popText(e.x + Phaser.Math.Between(-8, 8), this.cy(e) - 18, '' + d, '#ff8a3c', 9);
       if (e.hp <= 0) { this.killEnemy(e); return; }
     }
     if (u.t <= 0) this.clearBurn(e);
@@ -375,11 +445,11 @@ class GameScene extends Phaser.Scene {
     const P = this.hero.poison;
     if (!e.poison) e.poison = { stacks: 0, tick: P.tickMs / 1000, P, pips: this.add.graphics().setDepth(6) };
     e.poison.stacks++;
-    this.popText(e.x - 14, e.y - 40, `POISON x${e.poison.stacks}`, '#7dff6a', 8);
+    this.popText(e.x - 14, this.cy(e) - 40, `POISON x${e.poison.stacks}`, '#7dff6a', 8);
     for (let i = 0; i < 6; i++) this.bubble(e, 1);   // splash of spores on application
   }
   bubble(e, burst) {
-    const b = this.add.image(e.x + Phaser.Math.Between(-11, 11), e.y + Phaser.Math.Between(-10, 10), Math.random() < 0.6 ? 'pbubble' : 'pbubble_s')
+    const b = this.add.image(e.x + Phaser.Math.Between(-11, 11), this.cy(e) + Phaser.Math.Between(-10, 10), Math.random() < 0.6 ? 'pbubble' : 'pbubble_s')
       .setDepth(6).setTint(Math.random() < 0.5 ? 0xffffff : 0xb8ff7a);
     this.tweens.add({ targets: b, y: b.y - (burst ? 14 : 18) - Math.random() * 12, x: b.x + Phaser.Math.Between(-4, 4), alpha: 0,
       duration: burst ? 380 : 700, ease: 'Sine.easeOut', onComplete: () => b.destroy() });
@@ -389,7 +459,7 @@ class GameScene extends Phaser.Scene {
     u.tick -= dt;
     if (Math.random() < dt * (3 + Math.min(u.stacks, u.P.visualCap) * 2)) this.bubble(e, 0);   // rising toxic bubbles, denser with more stacks
     // stack pips under the HP bar (capped visually), xN when there are more
-    const g = u.pips, n = Math.min(u.stacks, u.P.visualCap), y = e.y - e.displayHeight / 2 - 11, x0 = e.x - n * 2;
+    const g = u.pips, n = Math.min(u.stacks, u.P.visualCap), y = this.top(e) - 11, x0 = e.x - n * 2;
     g.clear(); g.fillStyle(0x0d2a0a);
     for (let i = 0; i < n; i++) g.fillRect(x0 + i * 4 - 1, y - 1, 4, 4);
     g.fillStyle(0x6cf04a); for (let i = 0; i < n; i++) g.fillRect(x0 + i * 4, y, 2, 2);
@@ -399,7 +469,7 @@ class GameScene extends Phaser.Scene {
       u.tick += u.P.tickMs / 1000;
       const d = Math.max(1, Math.round(e.maxHp * u.P.pctMaxHpPerTick * u.stacks));
       e.hp -= d; e.setTintFill(0x5cff3a); this.time.delayedCall(70, () => e.active && e.clearTint());
-      this.popText(e.x + Phaser.Math.Between(-8, 8), e.y - 10, '' + d, '#5cff3a', 9);
+      this.popText(e.x + Phaser.Math.Between(-8, 8), this.cy(e) - 10, '' + d, '#5cff3a', 9);
       for (let i = 0; i < 4; i++) this.bubble(e, 1);
       this.poisonTicks = (this.poisonTicks || 0) + 1; this.poisonDmg = (this.poisonDmg || 0) + d;
       if (e.hp <= 0) { this.killEnemy(e); return; }
@@ -423,19 +493,120 @@ class GameScene extends Phaser.Scene {
 
   killEnemy(e) {
     this.clearBurn(e); this.clearPoison(e);
-    this.sparks(e.x, e.y - 8, 0xe055b0, 16);
-    e.hpBar.destroy(); e.disableBody(true, false);
+    this.sparks(e.x, this.cy(e) - 8, 0xe055b0, 16);
+    e.hpBar.destroy();
+    this.kills = (this.kills || 0) + 1;
+    if (e.kind === 'hydra') {   // death anim (own frame box), hold the last frame, then fade out
+      const D = this.E.meta.animations.death;
+      e.disableBody(true, false); e.dying = true; e.removeAllListeners('animationupdate');
+      e.setTexture(`${e.pre}_death`, 0).setOrigin(D.anchor.x, (D.anchor.footRow + 1) / D.frameHeight).setY(GROUND_Y);
+      e.play(`${e.pre}:death`); e.setFlipX(e.dir < 0);
+      e.once('animationcomplete', () => this.tweens.add({ targets: e, alpha: 0, delay: 500, duration: 500, onComplete: () => e.destroy() }));
+      return;
+    }
+    e.disableBody(true, false);
     this.tweens.add({ targets: e, alpha: 0, scaleY: 0.2, duration: 220, onComplete: () => e.destroy() });
   }
   touchEnemy(e) {
-    const st = this.st; if (st.invuln > 0 || st.dead || st.special || !e.active || e.stun > 0) return;
-    st.hp -= e.atk; st.invuln = 1.0; st.hurtT = 0.32; st.attacking = false; this.player.setFlipX(st.facing < 0);
-    const d = this.player.x < e.x ? -1 : 1;
-    this.player.setVelocity(d * 200, this.hero.flight ? -60 : -220);
+    if (!e.active || e.dying || e.stun > 0) return;
+    this.hurtPlayer(e.atk, e.x);
+  }
+  hurtPlayer(dmg, srcX, kb = 1) {
+    const st = this.st; if (st.invuln > 0 || st.dead || st.special || st.won) return false;
+    st.hp -= dmg; st.invuln = 1.0; st.hurtT = 0.32; st.attacking = false; this.player.setFlipX(st.facing < 0);
+    const d = this.player.x < srcX ? -1 : 1;
+    this.player.setVelocity(d * 200 * kb, this.hero.flight ? -60 * kb : -220 * kb);
     this.player.anims.play(this.A('hurt'), true);
     this.cameras.main.shake(90, 0.008); this.cameras.main.flash(80, 120, 20, 40);
-    this.popText(this.player.x, this.player.y - 160, '-' + e.atk, '#ff6a8a', 12);
+    this.popText(this.player.x, this.player.y - 160, '-' + dmg, '#ff6a8a', 12);
+    this.dmgTaken = (this.dmgTaken || 0) + dmg;
     if (st.hp <= 0) this.die();
+    return true;
+  }
+  // ---- Hydra rifle: 3-round burst, each bolt aimed at the hero's body at the moment it fires (±aimDeg), so moving / jumping / flying dodges ----
+  enemyFire(e) {
+    const T = e.T, mz = this.E.meta.animations.attack.muzzle, sc = this.E.sprite.scale, f = e.dir;
+    const x = e.x + f * mz.x * sc, y = e.y + mz.y * sc, p = this.player;
+    const tx = p.x, ty = p.body.center.y;
+    let a = Math.atan2(ty - y, (tx - x) * f);
+    a = Phaser.Math.Clamp(a, -Phaser.Math.DegToRad(T.aimDeg), Phaser.Math.DegToRad(T.aimDeg));
+    const ang = f > 0 ? a : Math.PI - a;
+    const b = this.ebolts.create(x, y, 'hydra_bolt', 0).setScale(0.5).setDepth(7).play('hydra:bolt');
+    b.setRotation(ang); b.body.setSize(12, 10).setOffset(26, 3);
+    if (f < 0) b.body.setOffset(2, 3);
+    b.setVelocity(Math.cos(ang) * T.boltSpeed, Math.sin(ang) * T.boltSpeed);
+    Object.assign(b, { dmg: T.boltDmg, startX: x, startY: y, range: T.boltRange, src: e });
+    const fl = this.add.sprite(x + f * 4, y, 'hydra_flash', 0).setScale(0.5).setDepth(7).play('hydra:flash');
+    fl.once('animationcomplete', () => fl.destroy());
+    this.enemyShots = (this.enemyShots || 0) + 1;
+  }
+  enemyBoltPop(b) {
+    if (!b.active) return;
+    const fx = this.add.sprite(b.x, b.y, 'hydra_flash', 1).setScale(0.4).setDepth(8).play('hydra:flash');
+    fx.once('animationcomplete', () => fx.destroy());
+    b.destroy();
+  }
+  enemyBoltHit(b) {
+    if (!b.active || b.dying) return;
+    const st = this.st; if (st.dead || st.special || st.won) return;
+    if (st.invuln > 0) return;   // i-frames: bolts pass through
+    const dmg = b.dmg, srcX = b.x - b.body.velocity.x;
+    this.enemyBoltPop(b); this.boltHits = (this.boltHits || 0) + 1;
+    this.hurtPlayer(dmg, srcX, 0.6);
+  }
+  // ---- Robot: Drone Support (K / X) — 2 drones hover beside the active hero and laser the nearest enemy ----
+  deployDrones() {
+    const h = this.hero, D = h.drones, st = this.st, p = this.player;
+    if (!D || st.dead || st.won || st.special || (st.droneCd || 0) > 0) return;
+    st.droneCd = D.cooldownMs / 1000; this.droneCasts = (this.droneCasts || 0) + 1;
+    this.drones.forEach(d => d.destroy()); this.drones = [];
+    for (let i = 0; i < D.count; i++) {
+      const side = i % 2 ? -1 : 1;
+      const d = this.add.sprite(p.x, p.y - 120, `${h.key}_drone`, 0).setScale(1).setDepth(6).play(`${h.key}:drone`);
+      Object.assign(d, { caster: h, side, t: D.durationMs / 1000, fireT: 0.25 + i * D.fireMs / 2000, ph: i * Math.PI });
+      this.tweens.add({ targets: d, x: p.x + side * D.offsetX, y: p.y + D.offsetY, duration: 260, ease: 'Back.easeOut' });
+      this.sparks(p.x, p.y - 120, 0xff9a3c, 6);
+      this.drones.push(d);
+    }
+    this.popText(p.x, p.y - 170, 'DRONES DEPLOYED', '#9dff7a', 9);
+  }
+  updateDrones(dt) {
+    if (!this.drones.length) return;
+    const p = this.player, now = this.time.now / 1000;
+    this.drones = this.drones.filter(d => {
+      const D = d.caster.drones;
+      d.t -= dt;
+      if (d.t <= 0 || this.st.won) {
+        this.sparks(d.x, d.y, 0xff9a3c, 5);
+        this.tweens.add({ targets: d, y: d.y - 30, alpha: 0, duration: 260, onComplete: () => d.destroy() });
+        return false;
+      }
+      const tx = p.x + d.side * D.offsetX - this.st.facing * 6, ty = p.y + D.offsetY + Math.sin(now * 4 + d.ph) * 5;
+      d.x += (tx - d.x) * Math.min(1, dt * 6); d.y += (ty - d.y) * Math.min(1, dt * 6);
+      // target: nearest living enemy in range
+      let best = null, bd = D.rangePx;
+      this.enemies.getChildren().forEach(e => { if (!e.active || !e.body || e.dying) return; const dd = Math.hypot(e.x - d.x, this.cy(e) - d.y); if (dd < bd) { bd = dd; best = e; } });
+      d.setFlipX(best ? best.x < d.x : this.st.facing < 0);
+      d.fireT -= dt;
+      if (best && d.fireT <= 0) {
+        d.fireT = D.fireMs / 1000;
+        const a = Math.atan2(this.cy(best) - d.y, best.x - d.x);
+        const b = this.dbolts.create(d.x + Math.cos(a) * 8, d.y + Math.sin(a) * 8, `${d.caster.key}_dlaser`).setScale(0.5).setDepth(7).setRotation(a);
+        b.body.setSize(10, 8).setOffset(7, 0);
+        b.setVelocity(Math.cos(a) * D.speed, Math.sin(a) * D.speed);
+        Object.assign(b, { caster: d.caster, startX: b.x, startY: b.y, range: D.rangePx + 40, dir: Math.sign(Math.cos(a)) || 1 });
+        this.sparks(d.x + Math.cos(a) * 8, d.y + Math.sin(a) * 8, 0x9dff7a, 2);
+      }
+      return true;
+    });
+  }
+  droneBoltHit(b, e) {
+    if (!b.active || !e.active || !e.body || e.dying) return;
+    const D = b.caster.drones;
+    b.destroy(); this.droneHits = (this.droneHits || 0) + 1;
+    const cur = this.hero; this.hero = b.caster;   // drones keep Robot's stats after a tag-swap
+    try { this.damageEnemy(e, { mult: D.damagePct, knockback: D.knockback, stun: 0.05, dir: b.dir, ranged: true, quiet: true }); }
+    finally { this.hero = cur; }
   }
   die() { const st = this.st; st.dead = true; this.player.setAngle(0); this.player.body.setAllowGravity(true); /* a downed flyer drops */ this.player.setTint(0x9070a0); this.msg.setText('THE RIFT CLAIMED YOU\npress R (or F for a Flashpoint)'); this.player.anims.play(this.A('hurt')); }
   hitstop(ms) { this.physics.world.pause(); this.anims.pauseAll(); this.time.delayedCall(ms, () => { this.physics.world.resume(); this.anims.resumeAll(); }); }
@@ -520,12 +691,12 @@ class GameScene extends Phaser.Scene {
     this.par.forEach(l => l.s.tilePositionX = cam.scrollX * l.f);
     this.drawHud(dt);
     if (Phaser.Input.Keyboard.JustDown(K.R)) { this.scene.restart({ party: this.party, idx: this.idx }); return; }
-    this.updateEnemies(dt);
+    this.updateEnemies(dt); this.updateDrones(dt);
     if (st.special) { if (this.dashFx) this.speedFx(dt, true); return; }
     if (p.y > VH + 60 && !st.dead) { st.hp = 0; this.die(); }
     if (st.dead) { p.setVelocityX(p.body.velocity.x * 0.9); return; }
 
-    st.vineCd = Math.max(0, st.vineCd - dt);
+    st.vineCd = Math.max(0, st.vineCd - dt); st.droneCd = Math.max(0, (st.droneCd || 0) - dt);
     st.invuln = Math.max(0, st.invuln - dt); st.hurtT = Math.max(0, st.hurtT - dt); st.swapCd = Math.max(0, st.swapCd - dt);
     p.setAlpha(st.invuln > 0 && st.hurtT <= 0 ? (Math.floor(time / 60) % 2 ? 0.35 : 1) : 1);
     const onGround = p.body.blocked.down || p.body.touching.down;
@@ -620,6 +791,51 @@ class GameScene extends Phaser.Scene {
   }
   applyFriction(onGround, dt) { const p = this.player; p.setVelocityX(p.body.velocity.x * (onGround ? Math.max(0, 1 - dt * 14) : 1 - dt * 2)); }
 
+  // Hydra AI: patrol -> (hero within aggro) march in -> hold a 250-300 px standoff -> 3-round burst -> cooldown. Never walks into a pit.
+  updateHydra(e, dt) {
+    const p = this.player, T = e.T, st = this.st;
+    this.updateBurn(e, dt); if (!e.active || e.dying) return;
+    this.updatePoison(e, dt); if (!e.active || e.dying) return;
+    e.cd -= dt; e.hurtT = Math.max(0, e.hurtT - dt);
+    const onGround = e.body.blocked.down || e.body.touching.down;
+    const dx = p.x - e.x, adx = Math.abs(dx), alive = !st.dead && !st.special && !st.won;
+    const aggro = alive && adx < T.aggroPx && p.y > GROUND_Y - 330;
+    let vx = 0, anim = 'idle';
+    if (e.stun > 0 || e.hurtT > 0 || !onGround) {
+      e.setVelocityX(e.body.velocity.x * (onGround ? 0.85 : 0.98));
+      e.setFlipX(e.dir < 0); this.drawEnemyBar(e); return;   // hurt anim / knockback plays out
+    }
+    if (e.shooting) { e.setVelocityX(0); e.setFlipX(e.dir < 0); this.drawEnemyBar(e); return; }
+    if (aggro) {
+      e.dir = dx < 0 ? -1 : 1;
+      const [near, far] = T.standoffPx;
+      if (adx > far) vx = e.dir * T.walkSpeed;                                     // close in
+      else if (adx < near - 40 && e.cd > 0) vx = -e.dir * T.walkSpeed * 0.6;      // too close: back off while reloading
+      if (adx <= far + 20 && e.cd <= 0) {                                          // in range: burst
+        e.shooting = true; e.setVelocityX(0); e.play(`${e.pre}:attack`, true); e.setFlipX(e.dir < 0); this.drawEnemyBar(e); return;
+      }
+    } else {
+      if (e.x < e.home - e.range) e.dir = 1; else if (e.x > e.home + e.range) e.dir = -1;
+      vx = e.dir * T.walkSpeed * 0.6;
+    }
+    // ledge check: don't step into a pit or off the world
+    const ahead = e.x + Math.sign(vx) * 22;
+    if (vx && (this.groundAt(ahead) !== Phaser.Math.Clamp(ahead, 20, WORLD_W - 20) || e.body.blocked.left && vx < 0 || e.body.blocked.right && vx > 0)) {
+      if (!aggro) e.dir = -e.dir;
+      vx = 0;
+    }
+    e.setVelocityX(vx);
+    const key = `${e.pre}:${vx ? 'walk' : 'idle'}`;
+    if (e.anims.currentAnim?.key !== key || !e.anims.isPlaying) e.play(key, true);
+    e.anims.timeScale = vx ? Phaser.Math.Clamp(Math.abs(vx) / T.walkSpeed, 0.5, 1.5) : 1;
+    e.setFlipX(e.dir < 0);
+    this.drawEnemyBar(e);
+  }
+  drawEnemyBar(e) {
+    const g = e.hpBar; g.clear();
+    if (e.hp < e.maxHp) { const w = e.kind === 'hydra' ? 32 : 24, x = e.x - w / 2, y = this.top(e) - 6;
+      g.fillStyle(0x140812).fillRect(x - 1, y - 1, w + 2, 4); g.fillStyle(e.T && e.T === this.E.types.elite ? 0xff2a3a : 0xff3a6e).fillRect(x, y, w * e.hp / e.maxHp, 2); }
+  }
   updateEnemies(dt) {
     const p = this.player;
     this.bolts.getChildren().slice().forEach(b => {
@@ -627,9 +843,14 @@ class GameScene extends Phaser.Scene {
         b.dying = true; b.body.enable = false; this.tweens.add({ targets: b, alpha: 0, scaleX: 0.2, duration: 90, onComplete: () => b.destroy() });
       }
     });
+    const fade = (b) => { b.dying = true; b.body.enable = false; this.tweens.add({ targets: b, alpha: 0, scaleX: 0.2, duration: 90, onComplete: () => b.destroy() }); };
+    [this.ebolts, this.dbolts].forEach(grp => grp.getChildren().slice().forEach(b => {
+      if (!b.dying && (Math.hypot(b.x - b.startX, b.y - b.startY) > b.range || b.x < 0 || b.x > WORLD_W || b.y > VH)) fade(b);
+    }));
     this.enemies.getChildren().forEach(e => {
-      if (!e.active || !e.body) return;
+      if (!e.active || !e.body || e.dying) return;
       e.stun = Math.max(0, e.stun - dt);
+      if (e.kind === 'hydra') { this.updateHydra(e, dt); return; }
       this.updateBurn(e, dt); if (!e.active || !e.body) return;
       this.updatePoison(e, dt); if (!e.active || !e.body) return;
       if (e.stun <= 0 && !e.anims.isPlaying) e.anims.resume?.() || e.play(e.kind === 'oni' ? 'oni_walk' : 'drone_fly');

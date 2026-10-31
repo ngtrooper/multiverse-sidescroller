@@ -1,5 +1,5 @@
 {
-  "comment": "Playable heroes (party order = Tab/1/2/3/4). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP).",
+  "comment": "Playable heroes (party order = Tab/1-5). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP). drones = Robot's K/X support drones; partyBuff = a party-wide passive applied in loader.js (Robot's Logic Engine).",
   "default": "Asagi Igawa",
   "heroes": [
     {
@@ -209,6 +209,70 @@
         "stun": 0.6,
         "guaranteedPoison": true,
         "note": "Thorn Eruption (K / X): a thorny vine bursts out of the floor under the nearest enemy within rangePx (either side; Ivy turns to face it), or fallbackPx in front if none. Hits every enemy it touches once per cast for damagePct x ATK (can crit) and always adds 1 Poison stack (Toxic rules: 2% max HP per 1 s tick, uncapped); the normal 50% Toxic roll is not applied on top. Cooldown cooldownMs, shared across tag-swaps."
+      }
+    },
+    {
+      "name": "Robot",
+      "key": "robot",
+      "portrait": "assets/portraits/robot_face.png",
+      "sprite": {
+        "meta": "assets/sprites/robot_hd/robot_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 58,
+          "height": 280
+        },
+        "muzzle": {
+          "x": 54,
+          "y": -121
+        }
+      },
+      "move": {
+        "walkSpeed": 70,
+        "runSpeed": 140,
+        "jumpVelocity": 460,
+        "airControl": 0.8,
+        "walkCyclePx": 95
+      },
+      "attack": {
+        "reach": 0,
+        "height": 0,
+        "knockback": 90,
+        "hitstopMs": 25
+      },
+      "ranged": {
+        "damagePct": 0.8,
+        "speed": 400,
+        "rangePx": 330,
+        "cooldownMs": 0,
+        "holdMs": 0,
+        "knockback": 90,
+        "aimDeg": 40,
+        "note": "Arm blaster: the image-right arm reconfigures into a cannon; one green bolt per attack anim (fireFrame 7, ~640 ms anim). Grounded while firing."
+      },
+      "drones": {
+        "sheet": "robot_drone.png",
+        "laser": "drone_laser.png",
+        "count": 2,
+        "durationMs": 5000,
+        "cooldownMs": 10000,
+        "fireMs": 500,
+        "rangePx": 300,
+        "speed": 420,
+        "damagePct": 0.2,
+        "knockback": 15,
+        "offsetX": 34,
+        "offsetY": -150,
+        "note": "Drone Support (K / X): 2 drones hover at shoulder height beside the active hero for durationMs, each lasering the nearest enemy within rangePx every fireMs for damagePct x Robot's ATK (can crit, no flinch/hitstop). Uses Robot's stats even after a tag-swap. Cooldown shared across swaps."
+      },
+      "partyBuff": {
+        "name": "Logic Engine",
+        "atkPct": 0.15,
+        "note": "Passive 'Logic Engine | +15% attack to all party members.' — applied at load to every hero's ATK (additive with other party buffs, like Heroes Idle). HUD shows ATK with a + and the buff line."
+      },
+      "ui": {
+        "accent": 14708778,
+        "spark": 10354554
       }
     }
   ]

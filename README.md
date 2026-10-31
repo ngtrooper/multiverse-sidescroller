@@ -10,9 +10,9 @@ This is a 16-bit multiverse side-scroller prototype built with Phaser 3 (vendore
 | ← / → or A / D | move |
 | Shift | run |
 | Space / W / ↑ | jump (hold to jump higher) |
-| J / Z | attack (Asagi: katana · Flash: rapid punch combo · Iron Man: hold to fire repulsors, alternating hands · Poison Ivy: vine whip) |
-| K / X | Poison Ivy: Thorn Eruption, a thorny vine bursts out of the floor under the nearest enemy (3.5 s cooldown) |
-| Tab or 1 / 2 / 3 / 4 | tag-swap hero in place (each keeps own HP) |
+| J / Z | attack (Asagi: katana · Flash: rapid punch combo · Iron Man: hold to fire repulsors, alternating hands · Poison Ivy: vine whip · Robot: arm blaster) |
+| K / X | Poison Ivy: Thorn Eruption, a thorny vine bursts out of the floor under the nearest enemy (3.5 s cooldown) · Robot: Drone Support, 2 drones laser the nearest enemy for 5 s (10 s cooldown) |
+| Tab or 1 / 2 / 3 / 4 / 5 | tag-swap hero in place (each keeps own HP) |
 | Iron Man | arrows / WASD fly 8-way · Space / Shift boost · no gravity while he's active |
 | F | Flashpoint special: portal, fade, stage restarts (rebirth prototype) |
 | R | restart |
@@ -20,9 +20,10 @@ This is a 16-bit multiverse side-scroller prototype built with Phaser 3 (vendore
 Start as The Flash: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Flash
 Start as Iron Man: https://ngtrooper.github.io/multiverse-sidescroller/?hero=IronMan
 Start as Poison Ivy: https://ngtrooper.github.io/multiverse-sidescroller/?hero=PoisonIvy
+Start as Robot: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Robot
 
 ## What's in this build
-- One test stage with parallax, one-way platforms, gaps, oni and drone enemies, an HP HUD, crits and a goal portal.
+- One test stage with parallax, one-way platforms, gaps, Hydra gunners and drone enemies, an HP HUD, crits and a goal portal.
 - Asagi's sprites come from image-to-video animation. Each clip is keyed off a magenta background, the feet are stabilised, and the frames are reduced to a locked 96-colour palette with a 1px outline. In game she is drawn at a 300px body height, so 1 texel = 1 screen pixel on the 1280x720 canvas.
   - idle, walk and attack each come from their own generated video clip.
   - run reuses the walk cycle at a higher rate.
@@ -39,6 +40,13 @@ Start as Poison Ivy: https://ngtrooper.github.io/multiverse-sidescroller/?hero=P
   - Vine whip (J/Z): reach about 84px, one hit per enemy per whip.
   - Thorn Eruption (K/X): a thorny vine bursts out of the floor under the nearest enemy within 360px (or just in front of her), lashes, and sinks back. It hits each enemy it touches once for 1.4× ATK, always adds a Poison stack, reaches flying drones, and has a 3.5s cooldown shown in the HUD. The vine is its own sprite made with the same video pipeline (no character).
   - Toxic: every hit has a 50% chance to add a Poison stack. Stacks have no cap and last until the enemy dies. Every second, each stack deals 2% of the enemy's max HP. You'll see green bubbles, stack pips over the enemy's HP bar and green tick numbers. Poison keeps ticking after you tag her out.
+- **Robot (Invincible)** is the fifth hero: a ranged tactician and summoner. His sprites use the same video pipeline: idle (mechanical breathing, head scan, eye pulse), walk, an arm-blaster attack where his arm reconfigures into a cannon, and a hurt flinch. Jump is a placeholder.
+  - Arm blaster (J/Z): one green bolt per shot, 0.8× ATK, 330px range, with a wide aim assist so he can hit enemies below a platform.
+  - Drone Support (K/X): 2 pixel-art drones hover beside the active hero for 5s and laser the nearest enemy every 0.5s (0.2× ATK each). They keep going after a tag-swap. 10s cooldown.
+  - Logic Engine: +15% ATK to every party member while Robot is in the party (the HUD shows `ATK 402+` and the buff tag).
+- **Hydra Grunts** replace the old placeholder oni and are the first ranged enemies. They march in, stop 250–300px away and fire 3-round bursts of slow green energy bolts from their rifles. Jump over the bolts, back out of range, or fly over them as Iron Man. Sprites come from the same video pipeline (idle, walk, rifle burst, hurt, death).
+  - **Hydra Elite** is a crimson palette swap with 2× HP, harder-hitting faster bolts and a shorter reload. Two of them guard the second half of the stage.
+  - The stage has 4 Grunts, 2 Elites and 6 drones. Enemy numbers live in `data/enemies.json`.
 - The hero stats file ships only the heroes in this build.
 
 To run it locally, serve the folder over HTTP: `python3 -m http.server`, then open http://localhost:8000/.

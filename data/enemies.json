@@ -1,0 +1,63 @@
+{
+  "comment": "Enemy archetypes. Hydra stats are scaled from Heroes Idle STORY_CSV 'Hydra Grunt' (ATK 5, HP 200) into this stage's hero numbers (hero ATK 300-400 per hit, HP 500-620): HP x7 -> 1400 (about 4-5 Robot shots / 4-5 melee hits), bolt damage x6 -> 30 (a hero survives ~17-20 bolts; i-frames after a hit mean a 3-round burst lands at most once). Tuned down from x8 / 40 dmg and 2.3 s cooldown after autopilot playtests: solo heroes ran out of HP around the 2nd pit. Elite = palette swap, 2x HP, 1.5x damage, faster bolts and a shorter (1.8 s) cooldown. Values are world px / ms / per-hit HP.",
+  "sprite": {
+    "meta": "assets/sprites/hydra_grunt_hd/hydra_hd_anim.json",
+    "scale": 0.5,
+    "body": {
+      "width": 60,
+      "height": 270
+    }
+  },
+  "bolt": {
+    "sheet": "assets/sprites/hydra_grunt_hd/hydra_bolt.png",
+    "frameWidth": 40,
+    "frameHeight": 16,
+    "flash": "assets/sprites/hydra_grunt_hd/hydra_flash.png",
+    "flashSize": 32
+  },
+  "types": {
+    "hydra": {
+      "name": "Hydra Grunt",
+      "sheetPrefix": "hydra",
+      "source": "Heroes Idle STORY_CSV: Hydra Grunt ATK 5 / HP 200",
+      "hp": 1400,
+      "contact": 60,
+      "boltDmg": 30,
+      "boltSpeed": 230,
+      "boltRange": 520,
+      "aimDeg": 14,
+      "walkSpeed": 55,
+      "walkCyclePx": 95,
+      "aggroPx": 430,
+      "standoffPx": [
+        250,
+        300
+      ],
+      "cooldownMs": 2600,
+      "patrolPx": 90
+    },
+    "elite": {
+      "name": "Hydra Elite",
+      "sheetPrefix": "hydra_elite",
+      "source": "palette swap of the Grunt (black/crimson suit, red lenses)",
+      "hp": 2800,
+      "contact": 80,
+      "boltDmg": 45,
+      "boltSpeed": 290,
+      "boltRange": 560,
+      "aimDeg": 16,
+      "walkSpeed": 65,
+      "walkCyclePx": 95,
+      "aggroPx": 470,
+      "standoffPx": [
+        250,
+        290
+      ],
+      "cooldownMs": 1800,
+      "patrolPx": 90
+    }
+  },
+  "planned": {
+    "commander": "Hydra Commander - later boss: Elite rig at ~0.6 scale-up, own palette (white/gold), 3 phases (burst fire, grenade arc, summons 2 Grunts), ~12000 HP. Not in this build."
+  }
+}

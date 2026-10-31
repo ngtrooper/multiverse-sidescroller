@@ -80,6 +80,26 @@
    "Pack": "Regular Booster Pack",
    "BaseDmgPct": 1,
    "ShopPrice": null
+  },
+  {
+   "Name": "Robot",
+   "Rarity": "Unique",
+   "Alignment": "Hero",
+   "Faction": "Guardians",
+   "Universe": "Invincible",
+   "Race": "Human",
+   "Attack": 350,
+   "Health": 500,
+   "CritChance": 0.15,
+   "CritDmg": 1,
+   "Flavor Text": "Logic dictates victory.",
+   "art": "robot.jpg",
+   "Passive": "Logic Engine | +15% attack to all party members.",
+   "Leader": "",
+   "Description": "Robot is one of the most coldly intelligent characters in the Invincible universe, a disembodied consciousness piloting remote-controlled suits who later transfers into a genetically engineered human body. His genius-level intellect and willingness to make decisions most heroes refuse to consider make him both the team's greatest tactical asset and its most existential threat. He genuinely believes his actions are for humanity's benefit, which makes him more unsettling than a simple villain. The series asks hard questions about what happens when the smartest person in the room decides they know better.",
+   "Pack": "Invincible Booster Pack|Regular Booster Pack",
+   "BaseDmgPct": 1,
+   "ShopPrice": 100000
   }
  ]
 }
