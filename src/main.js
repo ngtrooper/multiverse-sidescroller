@@ -28,6 +28,9 @@ class GameScene extends Phaser.Scene {
     }
   }
   A(name, h = this.hero) { return `${h.key}:${name}`; }
+  // ranged heroes with *_alt sheets fire with alternating hands: hand 0 = attack/shoot/lower, hand 1 = *_alt
+  RA(name, hand = this.st.hand) { return this.A(hand && this.hero.sprite.meta.animations[name + '_alt'] ? name + '_alt' : name); }
+  isFireAnim(key) { return ['attack', 'shoot', 'attack_alt', 'shoot_alt'].some(n => key === this.A(n)); }
   create() {
     Tex.all(this, VW, VH);
     makeTimePortal(this);
@@ -73,11 +76,11 @@ class GameScene extends Phaser.Scene {
       wasGround: true, dead: false, won: false, special: false, swapCd: 0, momentum: 0, trailT: 0 };
     this.applyHero();
     this.player.on('animationcomplete', (a) => {
-      if (a.key === this.A('attack') || a.key === this.A('shoot')) { this.st.attacking = false; if (this.hero.ranged) this.st.raisedT = this.hero.ranged.holdMs / 1000; }
-      if (a.key === this.A('lower')) this.st.lowering = false;
+      if (this.isFireAnim(a.key)) { this.st.attacking = false; if (this.hero.ranged) this.st.raisedT = this.hero.ranged.holdMs / 1000; }
+      if (a.key === this.A('lower') || a.key === this.A('lower_alt')) this.st.lowering = false;
     });
     this.player.on('animationupdate', (a, f) => {
-      if (this.hero.ranged) { if ((a.key === this.A('attack') || a.key === this.A('shoot')) && f.index - 1 === this.hero.sprite.meta.animations[a.key.split(':')[1]].fireFrame) this.fireBolt(); return; }
+      if (this.hero.ranged) { if (this.isFireAnim(a.key) && f.index - 1 === this.hero.sprite.meta.animations[a.key.split(':')[1]].fireFrame) this.fireBolt(); return; }
       if (a.key === this.A('attack')) this.onAttackFrame(f.index - 1);
     });
     this.bolts = this.physics.add.group({ allowGravity: false });
@@ -154,7 +157,7 @@ class GameScene extends Phaser.Scene {
     p.anims.stop(); p.setTexture(`${h.key}_idle`, 0).setOrigin(ax, ay).setScale(h.sprite.scale || 1).setAngle(0);
     p.body.setAllowGravity(!h.flight);                     // flyers hover; ground heroes fall when tagged in mid-air
     if (h.flight) p.setVelocityY(Math.min(0, p.body.velocity.y));
-    Object.assign(this.st, { attacking: false, lowering: false, raisedT: 0, fireCd: 0 });
+    Object.assign(this.st, { attacking: false, lowering: false, raisedT: 0, fireCd: 0, hand: 1 });   // hand 1 so the first shot uses hand 0
     p.body.setSize(B.width, B.height).setOffset(m.frameWidth * ax - B.width / 2, m.anchor.footRow + 1 - B.height);
     p.anims.play(this.A('idle'), true);
   }
@@ -253,7 +256,7 @@ class GameScene extends Phaser.Scene {
   }
   // ---- ranged: repulsor bolts + Burn DoT ----
   fireBolt() {
-    const h = this.hero, p = this.player, st = this.st, R = h.ranged, m = h.sprite.muzzle, f = st.facing;
+    const h = this.hero, p = this.player, st = this.st, R = h.ranged, m = (st.hand && h.sprite.muzzleAlt) || h.sprite.muzzle, f = st.facing;
     const x = p.x + f * m.x, y = p.y + m.y;
     const b = this.bolts.create(x, y, `${h.key}_bolt`, 0).setScale(0.5).setDepth(7).setFlipX(f < 0).play(`${h.key}:bolt`);
     // light aim assist: the palm sits at head height, so bolts bend toward the nearest enemy in a forward cone (±R.aimDeg)
@@ -499,7 +502,11 @@ class GameScene extends Phaser.Scene {
     const held = K.J.isDown || K.Z.isDown;
     if ((atkPressed || held) && !st.attacking && st.fireCd <= 0.12) {
       this.buf.atk = 0; st.attacking = true; st.lowering = false;
-      p.anims.play(this.A(st.raisedT > 0 ? 'shoot' : 'attack'), true);
+      if (h.sprite.meta.animations.attack_alt) {
+        // alternate hands every shot; if the other arm is still raised, skip the rest-pose frames of the new hand's raise
+        const raised = st.raisedT > 0; st.hand = st.hand ? 0 : 1;
+        p.anims.play({ key: this.RA('attack'), startFrame: raised ? 3 : 0 }, true);
+      } else p.anims.play(this.A(st.raisedT > 0 ? 'shoot' : 'attack'), true);
     }
     p.setFlipX(st.facing < 0);
     const vx = p.body.velocity.x, vy = p.body.velocity.y, flying = Math.abs(vx) > 70 && !st.attacking && st.raisedT <= 0 && !st.lowering;
@@ -507,8 +514,8 @@ class GameScene extends Phaser.Scene {
     p.setAngle(Phaser.Math.Linear(p.angle, tilt, Math.min(1, dt * 8)));
     this.thrusterFx(dt, flying);
     if (st.attacking || st.raisedT > 0) return;
-    if (!st.lowering && p.anims.currentAnim && (p.anims.currentAnim.key === this.A('attack') || p.anims.currentAnim.key === this.A('shoot'))) {
-      st.lowering = true; p.anims.play(this.A('lower'), true); return;
+    if (!st.lowering && p.anims.currentAnim && this.isFireAnim(p.anims.currentAnim.key)) {
+      st.lowering = true; p.anims.play(this.RA('lower'), true); return;
     }
     if (st.lowering && !flying) return;
     st.lowering = false;

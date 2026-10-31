@@ -163,6 +163,92 @@
     73
    ]
   },
+  "attack_alt": {
+   "sheet": "ironman_attack_alt.png",
+   "frames": 12,
+   "loop": false,
+   "durationsMs": [
+    35,
+    35,
+    35,
+    35,
+    40,
+    40,
+    45,
+    45,
+    55,
+    60,
+    50,
+    45
+   ],
+   "fireFrame": 9,
+   "source": "ironman_attack_alt_v3.mp4",
+   "sourceFrames": [
+    1,
+    5,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24,
+    26
+   ]
+  },
+  "shoot_alt": {
+   "sheet": "ironman_shoot_alt.png",
+   "frames": 6,
+   "loop": false,
+   "durationsMs": [
+    50,
+    60,
+    50,
+    45,
+    45,
+    50
+   ],
+   "fireFrame": 1,
+   "source": "ironman_attack_alt_v3.mp4",
+   "sourceFrames": [
+    20,
+    22,
+    24,
+    26,
+    28,
+    30
+   ]
+  },
+  "lower_alt": {
+   "sheet": "ironman_lower_alt.png",
+   "frames": 9,
+   "loop": false,
+   "durationsMs": [
+    45,
+    45,
+    45,
+    45,
+    45,
+    45,
+    45,
+    45,
+    45
+   ],
+   "source": "ironman_attack_alt_v3.mp4",
+   "sourceFrames": [
+    48,
+    51,
+    53,
+    55,
+    57,
+    60,
+    64,
+    68,
+    73
+   ]
+  },
   "jump": {
    "sheet": "ironman_jump.png",
    "frames": 2,

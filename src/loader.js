@@ -17,7 +17,7 @@ window.CharacterLoader = {
         flavor: stats['Flavor Text'], passive: stats.Passive, leader: stats.Leader,
         stats: { atk: stats.Attack, hp: stats.Health, crit, critDmg: stats.CritDmg ?? 1.5, baseDmgPct: stats.BaseDmgPct || 1 },
         sprite: { dir: entry.sprite.meta.replace(/[^/]*$/, ''), scale: entry.sprite.scale || 1, body: entry.sprite.body, attackArtFacesLeft: !!entry.sprite.attackArtFacesLeft,
-          muzzle: entry.sprite.muzzle, jets: entry.sprite.jets, meta },
+          muzzle: entry.sprite.muzzle, muzzleAlt: entry.sprite.muzzleAlt, jets: entry.sprite.jets, meta },
         move: entry.move, attack: entry.attack, fx: entry.fx, ui: entry.ui, momentum: entry.momentum,
         flight: entry.flight, ranged: entry.ranged, burn: entry.burn,
       };
