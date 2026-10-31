@@ -1,0 +1,111 @@
+{
+ "frameWidth": 333,
+ "frameHeight": 422,
+ "anchor": {
+  "x": 0.4839,
+  "y": 0.9834,
+  "footRow": 414
+ },
+ "cols": 8,
+ "scale": 0.6849,
+ "bodyHeightPx": 300,
+ "paletteSize": 96,
+ "animations": {
+  "idle": {
+   "sheet": "asagi_idle.png",
+   "frames": 8,
+   "loop": true,
+   "fps": 7,
+   "source": "asagi_idle_v1.mp4",
+   "sourceFrames": [
+    1,
+    10,
+    19,
+    28,
+    37,
+    46,
+    55,
+    64
+   ]
+  },
+  "walk": {
+   "sheet": "asagi_walk.png",
+   "frames": 10,
+   "loop": true,
+   "fps": 12,
+   "source": "asagi_walk_v1.mp4",
+   "sourceFrames": [
+    13,
+    17,
+    20,
+    24,
+    27,
+    31,
+    35,
+    38,
+    42,
+    45
+   ]
+  },
+  "attack": {
+   "sheet": "asagi_attack.png",
+   "frames": 15,
+   "loop": false,
+   "durationsMs": [
+    100,
+    60,
+    60,
+    60,
+    140,
+    60,
+    40,
+    40,
+    40,
+    40,
+    50,
+    150,
+    80,
+    80,
+    80
+   ],
+   "activeFrames": [
+    7,
+    8,
+    9,
+    10
+   ],
+   "source": "asagi_attack_v6.mp4",
+   "sourceFrames": [
+    1,
+    14,
+    18,
+    22,
+    26,
+    32,
+    36,
+    38,
+    40,
+    42,
+    44,
+    48,
+    54,
+    58,
+    64
+   ]
+  },
+  "jump": {
+   "sheet": "asagi_jump.png",
+   "frames": 2,
+   "loop": false,
+   "fps": 8,
+   "note": "walk frame with widest stride (rise) + idle frame (fall); placeholder"
+  },
+  "hurt": {
+   "sheet": "asagi_hurt.png",
+   "frames": 1,
+   "loop": false,
+   "fps": 8,
+   "note": "idle frame 0; game tints/knocks back; placeholder"
+  }
+ }
+}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rift Runners — Asagi test stage</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0a18;color:#cfd3ff;font:14px/1.4 monospace}
+  #game{position:fixed;inset:0}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges}
+  #help{position:fixed;left:8px;bottom:6px;opacity:.75;font-size:12px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="help">←/→ or A/D move · Shift run · Space/W/↑ jump · J/Z attack · R restart</div>
+<script src="vendor/phaser.min.js"></script>
+<script src="src/loader.js"></script>
+<script src="src/textures.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

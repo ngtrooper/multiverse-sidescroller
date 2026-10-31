@@ -1,0 +1,19 @@
+{
+ "source": "stat subset for the playable roster",
+ "heroes": [
+  {
+   "Name": "Asagi Igawa",
+   "Rarity": "Unique",
+   "Faction": "Taimanin",
+   "Universe": "Action Taimanin",
+   "Attack": 620,
+   "Health": 1000,
+   "CritChance": 0.3,
+   "CritDmg": 1.5,
+   "Flavor Text": "I fight so others don't have to.",
+   "Passive": "Lightning Taimanin | +40% crit chance passively. On every critical hit apply Shock and Bleed simultaneously.",
+   "Leader": "Black Taimanin | +20% ATK to all Taimanin allies.",
+   "BaseDmgPct": 1
+  }
+ ]
+}

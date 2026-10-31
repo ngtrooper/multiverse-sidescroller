@@ -1,0 +1,34 @@
+{
+  "comment": "Playable heroes. Stats come from heroes.json; sprite + body data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px).",
+  "default": "Asagi Igawa",
+  "heroes": [
+    {
+      "name": "Asagi Igawa",
+      "key": "asagi",
+      "portrait": "assets/portraits/asagi_face.png",
+      "sprite": {
+        "meta": "assets/sprites/asagi_hd/asagi_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 56,
+          "height": 280
+        }
+      },
+      "move": {
+        "walkSpeed": 80,
+        "runSpeed": 160,
+        "jumpVelocity": 470,
+        "airControl": 0.85,
+        "walkCyclePx": 110,
+        "runCyclePx": 170
+      },
+      "attack": {
+        "reach": 130,
+        "height": 150,
+        "knockback": 220,
+        "comboWindowMs": 160
+      },
+      "passiveCritBonus": 0.4
+    }
+  ]
+}
