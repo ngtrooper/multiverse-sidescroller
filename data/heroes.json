@@ -1,6 +1,20 @@
 {
- "source": "stat subset for the playable roster",
+ "source": "Heroes Idle characters.js",
  "heroes": [
+  {
+   "Name": "The Flash (Barry Allen)",
+   "Rarity": "Unique",
+   "Faction": "Justice League",
+   "Universe": "DC",
+   "Attack": 300,
+   "Health": 300,
+   "CritChance": 0.15,
+   "CritDmg": 1,
+   "Flavor Text": "",
+   "Passive": "Momentum Building | +10% critical chance per turn (stacks until end of stage).",
+   "Leader": "",
+   "BaseDmgPct": 1
+  },
   {
    "Name": "Asagi Igawa",
    "Rarity": "Unique",

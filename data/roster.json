@@ -1,5 +1,5 @@
 {
-  "comment": "Playable heroes. Stats come from heroes.json; sprite + body data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px).",
+  "comment": "Playable heroes (party order = Tab/1/2). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left.",
   "default": "Asagi Igawa",
   "heroes": [
     {
@@ -12,7 +12,8 @@
         "body": {
           "width": 56,
           "height": 280
-        }
+        },
+        "attackArtFacesLeft": true
       },
       "move": {
         "walkSpeed": 80,
@@ -28,7 +29,50 @@
         "knockback": 220,
         "comboWindowMs": 160
       },
-      "passiveCritBonus": 0.4
+      "passiveCritBonus": 0.4,
+      "ui": {
+        "accent": 4511999
+      }
+    },
+    {
+      "name": "The Flash (Barry Allen)",
+      "key": "flash",
+      "portrait": "assets/portraits/flash_face.png",
+      "sprite": {
+        "meta": "assets/sprites/flash_hd/flash_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 56,
+          "height": 280
+        }
+      },
+      "move": {
+        "walkSpeed": 150,
+        "runSpeed": 300,
+        "jumpVelocity": 500,
+        "airControl": 0.95,
+        "accel": 20,
+        "runCyclePx": 180
+      },
+      "attack": {
+        "reach": 80,
+        "height": 150,
+        "knockback": 140,
+        "comboWindowMs": 120,
+        "hitstopMs": 30
+      },
+      "fx": {
+        "trail": true
+      },
+      "ui": {
+        "accent": 16765503,
+        "spark": 16769354
+      },
+      "momentum": {
+        "perHit": 0.02,
+        "max": 0.3,
+        "note": "Momentum Building adapted for real-time: +2% crit per landed hit, max +30%, resets on swap/stage"
+      }
     }
   ]
 }
