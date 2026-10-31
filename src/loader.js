@@ -19,7 +19,7 @@ window.CharacterLoader = {
         sprite: { dir: entry.sprite.meta.replace(/[^/]*$/, ''), scale: entry.sprite.scale || 1, body: entry.sprite.body, attackArtFacesLeft: !!entry.sprite.attackArtFacesLeft,
           muzzle: entry.sprite.muzzle, muzzleAlt: entry.sprite.muzzleAlt, jets: entry.sprite.jets, meta },
         move: entry.move, attack: entry.attack, fx: entry.fx, ui: entry.ui, momentum: entry.momentum,
-        flight: entry.flight, ranged: entry.ranged, burn: entry.burn,
+        flight: entry.flight, ranged: entry.ranged, burn: entry.burn, poison: entry.poison,
       };
     }));
     // ?hero= matches name or key, case/space-insensitive, then by substring (IronMan, ironman, Iron%20Man, flash ...)

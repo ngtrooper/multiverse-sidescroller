@@ -10,14 +10,15 @@ This is a 16-bit multiverse side-scroller prototype built with Phaser 3 (vendore
 | ← / → or A / D | move |
 | Shift | run |
 | Space / W / ↑ | jump (hold to jump higher) |
-| J / Z | attack (Asagi: katana · Flash: rapid punch combo · Iron Man: hold to fire repulsors, alternating hands) |
-| Tab or 1 / 2 / 3 | tag-swap hero in place (each keeps own HP) |
+| J / Z | attack (Asagi: katana · Flash: rapid punch combo · Iron Man: hold to fire repulsors, alternating hands · Poison Ivy: vine whip) |
+| Tab or 1 / 2 / 3 / 4 | tag-swap hero in place (each keeps own HP) |
 | Iron Man | arrows / WASD fly 8-way · Space / Shift boost · no gravity while he's active |
 | F | Flashpoint special: portal, fade, stage restarts (rebirth prototype) |
 | R | restart |
 
 Start as The Flash: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Flash
 Start as Iron Man: https://ngtrooper.github.io/multiverse-sidescroller/?hero=IronMan
+Start as Poison Ivy: https://ngtrooper.github.io/multiverse-sidescroller/?hero=PoisonIvy
 
 ## What's in this build
 - One test stage with parallax, one-way platforms, gaps, oni and drone enemies, an HP HUD, crits and a goal portal.
@@ -33,6 +34,9 @@ Start as Iron Man: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Iro
   - Flight: no gravity, 8-way movement with acceleration, drag and a hover bob; Space/Shift boost. He can hover over pits but can't go through the ground.
   - Repulsor: hold J/Z for about 2.4 shots per second, alternating hands (0.55× ATK each, 300px range, light aim assist). Every hit adds a Burn stack (2 on crit) that ticks 5% ATK per stack every 0.5s for 2s, shown as small flames.
   - Tag-swapping midair to Asagi or Flash makes them fall; swapping back resumes hovering. More drones were added to the stage.
+- **Poison Ivy (Shtora)** is the fourth hero: a melee fighter with a damage-over-time passive. Her sprites use the same video pipeline: idle (breathing, hair and leaf sway, curling fingers), a catwalk walk cycle, a thorny vine-whip attack from her raised hand that snaps back, and a real hurt flinch. Jump is a placeholder.
+  - Vine whip (J/Z): reach about 84px, one hit per enemy per whip.
+  - Toxic: every hit has a 50% chance to add a Poison stack. Stacks have no cap and last until the enemy dies. Every second, each stack deals 2% of the enemy's max HP. You'll see green bubbles, stack pips over the enemy's HP bar and green tick numbers. Poison keeps ticking after you tag her out.
 - The hero stats file ships only the heroes in this build.
 
 To run it locally, serve the folder over HTTP: `python3 -m http.server`, then open http://localhost:8000/.

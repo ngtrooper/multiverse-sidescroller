@@ -1,5 +1,5 @@
 {
-  "comment": "Playable heroes (party order = Tab/1/2/3). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets).",
+  "comment": "Playable heroes (party order = Tab/1/2/3/4). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP).",
   "default": "Asagi Igawa",
   "heroes": [
     {
@@ -156,6 +156,45 @@
       "ui": {
         "accent": 13117486,
         "spark": 10479359
+      }
+    },
+    {
+      "name": "Poison Ivy (Shtora)",
+      "key": "ivy",
+      "portrait": "assets/portraits/ivy_face.png",
+      "sprite": {
+        "meta": "assets/sprites/ivy_hd/ivy_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 52,
+          "height": 276
+        }
+      },
+      "move": {
+        "walkSpeed": 75,
+        "runSpeed": 150,
+        "jumpVelocity": 470,
+        "airControl": 0.85,
+        "walkCyclePx": 92,
+        "runCyclePx": 115
+      },
+      "attack": {
+        "reach": 84,
+        "height": 120,
+        "knockback": 160,
+        "comboWindowMs": 160,
+        "hitstopMs": 40
+      },
+      "poison": {
+        "chance": 0.5,
+        "pctMaxHpPerTick": 0.02,
+        "tickMs": 1000,
+        "visualCap": 6,
+        "note": "Toxic adapted for real-time: 50% per landed hit to add a Poison stack; stacks are uncapped and never expire (until the enemy dies); each stack deals 2% of the enemy's max HP every tickMs (1 card 'round' = 1 s). Pips above the HP bar show up to visualCap stacks, then xN."
+      },
+      "ui": {
+        "accent": 3060794,
+        "spark": 9567592
       }
     }
   ]

@@ -1,8 +1,9 @@
 // Rift Runners — test stage. Phaser 3 (vendored), arcade physics.
 // World is laid out in 640x360 "world px"; the canvas is 2x (1280x720) and the camera zooms 2x, so the
 // HD hero sprites (drawn at 0.5 scale) show 1 texel = 1 screen px while the world tiles stay chunky 2x.
-// Party: every roster hero is loaded; Tab / 1 / 2 / 3 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Party: every roster hero is loaded; Tab / 1-4 tag-swaps in place. F = Flashpoint (rebirth demo).
 // Flying heroes (roster.flight, e.g. Iron Man) ignore gravity and move 8-way; ranged heroes fire projectiles with Burn DoT.
+// roster.poison (Poison Ivy's Toxic): 50% per hit to add an uncapped Poison stack, each ticking 2% of the enemy's max HP per second.
 const VW = 640, VH = 360, GROUND_Y = 316, WORLD_W = 3600, ZOOM = 2;
 // scrollFactor-0 objects are zoomed around the screen centre; this offset pins them to the top-left
 const UIX = VW * (ZOOM - 1) / 2, UIY = VH * (ZOOM - 1) / 2;
@@ -33,6 +34,7 @@ class GameScene extends Phaser.Scene {
   isFireAnim(key) { return ['attack', 'shoot', 'attack_alt', 'shoot_alt'].some(n => key === this.A(n)); }
   create() {
     Tex.all(this, VW, VH);
+    makePoisonTex(this);
     makeTimePortal(this);
     this.physics.world.setBounds(0, 0, WORLD_W, VH + 200);
     this.cameras.main.setBounds(0, 0, WORLD_W, VH).setZoom(ZOOM).setRoundPixels(true);
@@ -99,16 +101,14 @@ class GameScene extends Phaser.Scene {
 
     // ---- camera / input / hud ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 40).setDeadzone(60, 40);
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,SHIFT,R,F,TAB,ONE,TWO,THREE');
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR');
     this.input.keyboard.addCapture('SPACE,UP,DOWN,LEFT,RIGHT,TAB');
     this.buf = { jump: 0, atk: 0 };
     const kb = this.input.keyboard;
     ['SPACE', 'UP', 'W'].forEach(k => kb.on('keydown-' + k, () => this.buf.jump = 0.12));
     ['J', 'Z'].forEach(k => kb.on('keydown-' + k, () => this.buf.atk = 0.15));
     kb.on('keydown-TAB', () => this.swapTo((this.idx + 1) % this.party.length));
-    kb.on('keydown-ONE', () => this.swapTo(0));
-    kb.on('keydown-TWO', () => this.swapTo(1));
-    kb.on('keydown-THREE', () => this.swapTo(2));
+    ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
     kb.on('keydown-F', () => this.flashpoint());
     this.makeHud();
     if (this.rebirths) {
@@ -205,7 +205,7 @@ class GameScene extends Phaser.Scene {
     this.subT = this.add.text(58, 20, '', { fontFamily: 'monospace', fontSize: '8px', color: '#b8a8ff' });
     this.hpG = this.add.graphics();
     this.hpT = this.add.text(58, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff' });
-    // party strip: who is benched (Tab / 1 / 2)
+    // party strip: who is benched (Tab / 1-4)
     const strip = this.party.map((ph, i) => this.add.text(6 + i * 70, 60, `${i + 1} ${ph.key.toUpperCase()}`, { fontFamily: 'monospace', fontSize: '8px',
       color: i === this.idx ? '#ffe14a' : '#8a80a8', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.msg = this.msg && this.msg.text ? this.add.text(VW / 2, 120, this.msg.text, this.msgStyle()) : this.add.text(VW / 2, 120, '', this.msgStyle());
@@ -248,6 +248,7 @@ class GameScene extends Phaser.Scene {
     e.setVelocityX(dir * kb); if (e.kind === 'oni' && !o.ranged) e.setVelocityY(-120);
     e.anims.pause(); e.setFrame(2);
     if (this.hero.burn) this.addBurn(e, crit ? 2 : 1);   // Mark VII: Burn on every hit, +1 stack on crit
+    if (this.hero.poison && Math.random() < this.hero.poison.chance) this.addPoison(e);   // Poison Ivy: Toxic
     this.popText(e.x, e.y - 26, (crit ? '⚡' : '') + dmg, crit ? '#ffe14a' : '#ffffff', crit ? 14 : 11);
     this.sparks(e.x, e.y - 8, this.hero.ui?.spark ?? (crit ? 0x7ff0ff : 0xffffff), crit ? 10 : 6);
     this.cameras.main.shake(o.ranged ? 40 : 60, crit ? 0.005 : o.ranged ? 0.0015 : 0.003);
@@ -315,6 +316,42 @@ class GameScene extends Phaser.Scene {
     if (u.t <= 0) this.clearBurn(e);
   }
   clearBurn(e) { if (e.flame) e.flame.destroy(); e.burn = null; e.flame = null; }
+  // ---- Toxic: Poison stacks (uncapped, no expiry) tick % of the enemy's max HP; the DoT keeps running after Ivy tags out ----
+  addPoison(e) {
+    const P = this.hero.poison;
+    if (!e.poison) e.poison = { stacks: 0, tick: P.tickMs / 1000, P, pips: this.add.graphics().setDepth(6) };
+    e.poison.stacks++;
+    this.popText(e.x - 14, e.y - 40, `POISON x${e.poison.stacks}`, '#7dff6a', 8);
+    for (let i = 0; i < 6; i++) this.bubble(e, 1);   // splash of spores on application
+  }
+  bubble(e, burst) {
+    const b = this.add.image(e.x + Phaser.Math.Between(-11, 11), e.y + Phaser.Math.Between(-10, 10), Math.random() < 0.6 ? 'pbubble' : 'pbubble_s')
+      .setDepth(6).setTint(Math.random() < 0.5 ? 0xffffff : 0xb8ff7a);
+    this.tweens.add({ targets: b, y: b.y - (burst ? 14 : 18) - Math.random() * 12, x: b.x + Phaser.Math.Between(-4, 4), alpha: 0,
+      duration: burst ? 380 : 700, ease: 'Sine.easeOut', onComplete: () => b.destroy() });
+  }
+  updatePoison(e, dt) {
+    const u = e.poison; if (!u) return;
+    u.tick -= dt;
+    if (Math.random() < dt * (3 + Math.min(u.stacks, u.P.visualCap) * 2)) this.bubble(e, 0);   // rising toxic bubbles, denser with more stacks
+    // stack pips under the HP bar (capped visually), xN when there are more
+    const g = u.pips, n = Math.min(u.stacks, u.P.visualCap), y = e.y - e.displayHeight / 2 - 11, x0 = e.x - n * 2;
+    g.clear(); g.fillStyle(0x0d2a0a);
+    for (let i = 0; i < n; i++) g.fillRect(x0 + i * 4 - 1, y - 1, 4, 4);
+    g.fillStyle(0x6cf04a); for (let i = 0; i < n; i++) g.fillRect(x0 + i * 4, y, 2, 2);
+    if (u.stacks > u.P.visualCap) { if (!u.lbl) u.lbl = this.add.text(0, 0, '', { fontFamily: 'monospace', fontSize: '7px', color: '#9dff7a', stroke: '#0d2a0a', strokeThickness: 2 }).setOrigin(0, 0.5).setDepth(6);
+      u.lbl.setText('x' + u.stacks).setPosition(x0 + n * 4 + 1, y + 1); }
+    if (u.tick <= 0) {
+      u.tick += u.P.tickMs / 1000;
+      const d = Math.max(1, Math.round(e.maxHp * u.P.pctMaxHpPerTick * u.stacks));
+      e.hp -= d; e.setTintFill(0x5cff3a); this.time.delayedCall(70, () => e.active && e.clearTint());
+      this.popText(e.x + Phaser.Math.Between(-8, 8), e.y - 10, '' + d, '#5cff3a', 9);
+      for (let i = 0; i < 4; i++) this.bubble(e, 1);
+      this.poisonTicks = (this.poisonTicks || 0) + 1; this.poisonDmg = (this.poisonDmg || 0) + d;
+      if (e.hp <= 0) { this.killEnemy(e); return; }
+    }
+  }
+  clearPoison(e) { if (e.poison) { e.poison.pips.destroy(); if (e.poison.lbl) e.poison.lbl.destroy(); } e.poison = null; }
   thrusterFx(dt, flying) {
     const h = this.hero, p = this.player, st = this.st, f = st.facing;
     st.jetT = (st.jetT || 0) - dt; if (st.jetT > 0) return;
@@ -331,7 +368,7 @@ class GameScene extends Phaser.Scene {
   }
 
   killEnemy(e) {
-    this.clearBurn(e);
+    this.clearBurn(e); this.clearPoison(e);
     this.sparks(e.x, e.y - 8, 0xe055b0, 16);
     e.hpBar.destroy(); e.disableBody(true, false);
     this.tweens.add({ targets: e, alpha: 0, scaleY: 0.2, duration: 220, onComplete: () => e.destroy() });
@@ -539,6 +576,7 @@ class GameScene extends Phaser.Scene {
       if (!e.active || !e.body) return;
       e.stun = Math.max(0, e.stun - dt);
       this.updateBurn(e, dt); if (!e.active || !e.body) return;
+      this.updatePoison(e, dt); if (!e.active || !e.body) return;
       if (e.stun <= 0 && !e.anims.isPlaying) e.anims.resume?.() || e.play(e.kind === 'oni' ? 'oni_walk' : 'drone_fly');
       if (e.stun <= 0) {
         if (e.kind === 'oni') {
@@ -556,11 +594,24 @@ class GameScene extends Phaser.Scene {
         }
       } else if (e.kind === 'drone') e.setVelocity(e.body.velocity.x * 0.9, e.body.velocity.y * 0.9);
       e.setFlipX(e.dir > 0);
-      if (e.y > VH + 80) { this.clearBurn(e); e.hpBar.destroy(); e.destroy(); return; }
+      if (e.y > VH + 80) { this.clearBurn(e); this.clearPoison(e); e.hpBar.destroy(); e.destroy(); return; }
       const g = e.hpBar; g.clear();
       if (e.hp < e.maxHp) { const w = 24, x = e.x - 12, y = e.y - e.displayHeight / 2 - 6; g.fillStyle(0x140812).fillRect(x - 1, y - 1, w + 2, 4); g.fillStyle(0xff3a6e).fillRect(x, y, w * e.hp / e.maxHp, 2); }
     });
   }
+}
+
+// toxic bubbles for Poison (tiny pixel rings, generated so they always match the palette)
+function makePoisonTex(scene) {
+  const mk = (key, rows) => {
+    if (scene.textures.exists(key)) return;
+    const cv = document.createElement('canvas'); cv.width = rows[0].length; cv.height = rows.length; const ctx = cv.getContext('2d');
+    const col = { o: '#1f6b14', g: '#6cf04a', w: '#e8ffd0' };
+    rows.forEach((r, y) => [...r].forEach((c, x) => { if (col[c]) { ctx.fillStyle = col[c]; ctx.fillRect(x, y, 1, 1); } }));
+    scene.textures.addCanvas(key, cv);
+  };
+  mk('pbubble', ['.ooo.', 'ogwgo', 'og.go', 'oggg.', '.ooo.'].map(r => r.replace(/\./g, ' ')));
+  mk('pbubble_s', ['.o.', 'owo', '.o.'].map(r => r.replace(/\./g, ' ')));
 }
 
 // swirling yellow/red time portal, drawn per pixel (ordered dither, hard edges) so it matches the 16-bit look
