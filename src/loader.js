@@ -20,6 +20,7 @@ window.CharacterLoader = {
           muzzle: entry.sprite.muzzle, muzzleAlt: entry.sprite.muzzleAlt, jets: entry.sprite.jets, meta },
         move: entry.move, attack: entry.attack, fx: entry.fx, ui: entry.ui, momentum: entry.momentum,
         flight: entry.flight, ranged: entry.ranged, burn: entry.burn, poison: entry.poison,
+        floorVine: entry.floorVine ? { ...entry.floorVine, dir: entry.floorVine.meta.replace(/[^/]*$/, ''), meta: await j(entry.floorVine.meta) } : undefined,
       };
     }));
     // ?hero= matches name or key, case/space-insensitive, then by substring (IronMan, ironman, Iron%20Man, flash ...)

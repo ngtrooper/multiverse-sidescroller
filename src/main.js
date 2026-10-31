@@ -21,6 +21,10 @@ class GameScene extends Phaser.Scene {
         if (!this.textures.exists(`${h.key}_${name}`))
           this.load.spritesheet(`${h.key}_${name}`, h.sprite.dir + a.sheet, { frameWidth: m.frameWidth, frameHeight: m.frameHeight });
       if (!this.textures.exists(`portrait_${h.key}`)) this.load.image(`portrait_${h.key}`, h.portrait);
+      if (h.floorVine && !this.textures.exists(`${h.key}_floorvine`)) {   // Poison Ivy: Thorn Eruption FX sheet
+        const V = h.floorVine.meta;
+        this.load.spritesheet(`${h.key}_floorvine`, h.floorVine.dir + V.animations.floor_vine.sheet, { frameWidth: V.frameWidth, frameHeight: V.frameHeight });
+      }
       if (h.ranged && !this.textures.exists(`${h.key}_bolt`)) {
         this.load.spritesheet(`${h.key}_bolt`, h.sprite.dir + 'repulsor.png', { frameWidth: 56, frameHeight: 24 });
         this.load.spritesheet(`${h.key}_bolthit`, h.sprite.dir + 'repulsor_hit.png', { frameWidth: 40, frameHeight: 40 });
@@ -75,7 +79,7 @@ class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.oneway, null, () => !this.hero.flight);   // flyers pass through one-way platforms
     this.hpStore = Object.fromEntries(this.party.map(h => [h.key, h.stats.hp]));
     this.st = { hp: this.hero.stats.hp, maxHp: this.hero.stats.hp, facing: 1, attacking: false, hitSet: null, invuln: 0, hurtT: 0, jumpT: 0, landT: 0,
-      wasGround: true, dead: false, won: false, special: false, swapCd: 0, momentum: 0, trailT: 0 };
+      wasGround: true, dead: false, won: false, special: false, swapCd: 0, momentum: 0, trailT: 0, vineCd: 0 };
     this.applyHero();
     this.player.on('animationcomplete', (a) => {
       if (this.isFireAnim(a.key)) { this.st.attacking = false; if (this.hero.ranged) this.st.raisedT = this.hero.ranged.holdMs / 1000; }
@@ -101,7 +105,7 @@ class GameScene extends Phaser.Scene {
 
     // ---- camera / input / hud ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 40).setDeadzone(60, 40);
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR');
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR');
     this.input.keyboard.addCapture('SPACE,UP,DOWN,LEFT,RIGHT,TAB');
     this.buf = { jump: 0, atk: 0 };
     const kb = this.input.keyboard;
@@ -110,6 +114,7 @@ class GameScene extends Phaser.Scene {
     kb.on('keydown-TAB', () => this.swapTo((this.idx + 1) % this.party.length));
     ['ONE', 'TWO', 'THREE', 'FOUR'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
     kb.on('keydown-F', () => this.flashpoint());
+    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castVine()));   // Poison Ivy: Thorn Eruption
     this.makeHud();
     if (this.rebirths) {
       this.msg.setText(`FLASHPOINT #${this.rebirths}\ntimeline rewritten`);
@@ -141,6 +146,11 @@ class GameScene extends Phaser.Scene {
     else {
       if (!an.run) mk('run', 'walk', { ...an.walk }, M.runSpeed * an.walk.frames / (M.runCyclePx || M.walkCyclePx * 1.6));
       if (!an.walk) mk('walk', 'run', { ...an.run }, M.walkSpeed * an.run.frames / M.runCyclePx);
+    }
+    if (h.floorVine && !this.anims.exists(`${h.key}:floorvine`)) {
+      const a = h.floorVine.meta.animations.floor_vine;
+      const frames = this.anims.generateFrameNumbers(`${h.key}_floorvine`, { start: 0, end: a.frames - 1 }).map((f, i) => ({ ...f, duration: a.durationsMs[i] - 1 }));
+      this.anims.create({ key: `${h.key}:floorvine`, frames, frameRate: 1000, repeat: 0 });
     }
     if (h.ranged) {
       const k1 = `${h.key}:bolt`, k2 = `${h.key}:bolthit`;
@@ -210,7 +220,8 @@ class GameScene extends Phaser.Scene {
       color: i === this.idx ? '#ffe14a' : '#8a80a8', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.msg = this.msg && this.msg.text ? this.add.text(VW / 2, 120, this.msg.text, this.msgStyle()) : this.add.text(VW / 2, 120, '', this.msgStyle());
     this.msg.setOrigin(0.5);
-    this.hud.add([g, por, name, this.subT, this.hpG, this.hpT, ...strip, this.msg]);
+    this.vineT = h.floorVine ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // Thorn Eruption cooldown
+    this.hud.add([g, por, name, this.subT, this.hpG, this.hpT, ...strip, this.msg, ...(this.vineT ? [this.vineT] : [])]);
     this.hpShown = this.st.hp;
   }
   msgStyle() { return { fontFamily: 'monospace', fontSize: '16px', color: '#ffffff', align: 'center', stroke: '#1a0f2a', strokeThickness: 4 }; }
@@ -225,6 +236,7 @@ class GameScene extends Phaser.Scene {
     g.fillStyle(0xffffff, 0.35).fillRect(x, y, w * f, 2);
     this.hpT.setText(`HP ${Math.max(0, Math.ceil(st.hp))}/${st.maxHp}`);
     this.subT.setText(`${h.faction} · ATK ${h.stats.atk} · CRIT ${Math.round(this.critChance() * 100)}%`);
+    if (this.vineT) { const cd = st.vineCd; this.vineT.setText(cd > 0 ? `K VINE ${cd.toFixed(1)}s` : 'K VINE READY').setColor(cd > 0 ? '#5f7f5a' : '#7dff6a'); }
   }
 
   // ---------------- combat ----------------
@@ -248,12 +260,54 @@ class GameScene extends Phaser.Scene {
     e.setVelocityX(dir * kb); if (e.kind === 'oni' && !o.ranged) e.setVelocityY(-120);
     e.anims.pause(); e.setFrame(2);
     if (this.hero.burn) this.addBurn(e, crit ? 2 : 1);   // Mark VII: Burn on every hit, +1 stack on crit
-    if (this.hero.poison && Math.random() < this.hero.poison.chance) this.addPoison(e);   // Poison Ivy: Toxic
+    if (this.hero.poison && (o.poison || (!o.noToxicRoll && Math.random() < this.hero.poison.chance))) this.addPoison(e);   // Poison Ivy: Toxic
     this.popText(e.x, e.y - 26, (crit ? '⚡' : '') + dmg, crit ? '#ffe14a' : '#ffffff', crit ? 14 : 11);
     this.sparks(e.x, e.y - 8, this.hero.ui?.spark ?? (crit ? 0x7ff0ff : 0xffffff), crit ? 10 : 6);
     this.cameras.main.shake(o.ranged ? 40 : 60, crit ? 0.005 : o.ranged ? 0.0015 : 0.003);
     this.hitstop(crit ? (o.ranged ? 40 : 70) : this.hero.attack.hitstopMs ?? 45);
     if (e.hp <= 0) this.killEnemy(e);
+  }
+  // ---- Poison Ivy: Thorn Eruption (K / X) — a thorny vine bursts from the floor under the nearest enemy in range ----
+  groundAt(x) {   // nearest x with floor under it (the stage has two pits)
+    const gaps = [[1100, 1180], [2080, 2170]];
+    for (const [a, b] of gaps) if (x > a - 14 && x < b + 14) return x - a < b - x ? a - 14 : b + 14;
+    return Phaser.Math.Clamp(x, 20, WORLD_W - 20);
+  }
+  castVine() {
+    const h = this.hero, V = h.floorVine, st = this.st, p = this.player;
+    if (!V || st.dead || st.won || st.special || st.vineCd > 0) return;
+    let best = null, bd = V.rangePx;
+    this.enemies.getChildren().forEach(e => { if (!e.active || !e.body) return; const d = Math.abs(e.x - p.x); if (d <= bd && Math.abs(e.y - p.y) < 220) { bd = d; best = e; } });
+    if (best) { st.facing = best.x < p.x ? -1 : 1; p.setFlipX(st.facing < 0); }
+    const dir = st.facing, x = this.groundAt(best ? best.x : p.x + dir * V.fallbackPx), y = GROUND_Y;
+    st.vineCd = V.cooldownMs / 1000; this.vineCasts = (this.vineCasts || 0) + 1;
+    this.sparks(p.x + dir * 20, p.y - 90, h.ui?.spark ?? 0x91fd68, 6);   // a flick of the raised hand
+    // telegraph: green spores + cracking soil, the mound fades in, then the vine erupts
+    for (let i = 0; i < 8; i++) this.time.delayedCall(i * 18, () => this.sparks(x + Phaser.Math.Between(-14, 14), y - 2, i % 2 ? 0x5cff3a : 0x6b4a2a, 2));
+    const A = V.meta.animations.floor_vine, vs = this.add.sprite(x, y + 1, `${h.key}_floorvine`, 0)
+      .setOrigin(V.meta.anchor.x, (V.meta.anchor.footRow + 1) / V.meta.frameHeight).setScale(V.scale).setDepth(4.5).setFlipX(dir < 0).setAlpha(0);
+    this.vines = this.vines || []; this.vines.push(vs);
+    vs.hit = new Set(); vs.caster = h; vs.dir = dir;
+    this.tweens.add({ targets: vs, alpha: 1, duration: V.telegraphMs, onComplete: () => {
+      if (!vs.active) return;
+      vs.play(`${h.key}:floorvine`); this.cameras.main.shake(90, 0.004);
+    } });
+    vs.on('animationupdate', (a, f) => { const i = f.index - 1; if (A.activeFrames.includes(i)) this.vineHit(vs, i); });
+    vs.on('animationcomplete', () => this.tweens.add({ targets: vs, alpha: 0, duration: 180, onComplete: () => { vs.destroy(); this.vines = this.vines.filter(v => v !== vs); } }));
+  }
+  vineHit(vs, i) {
+    const V = vs.caster.floorVine, A = V.meta.animations.floor_vine, sc = V.scale;
+    const top = GROUND_Y - A.heightPx[i] * sc, reach = Math.max(V.widthPx / 2, A.reachPx[i] * sc);
+    const x0 = vs.dir > 0 ? vs.x - V.widthPx / 2 : vs.x - reach, rect = new Phaser.Geom.Rectangle(x0, top, V.widthPx / 2 + reach, GROUND_Y - top);
+    this.enemies.getChildren().forEach(e => {
+      if (!e.active || !e.body || vs.hit.has(e)) return;
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(rect, e.getBounds())) return;
+      vs.hit.add(e); this.vineHits = (this.vineHits || 0) + 1;
+      const cur = this.hero; this.hero = vs.caster;   // a vine cast before a tag-swap still uses Ivy's stats + Toxic
+      try { this.damageEnemy(e, { mult: V.damagePct, knockback: V.knockback, dir: vs.dir, stun: V.stun, poison: V.guaranteedPoison, noToxicRoll: true }); }
+      finally { this.hero = cur; }
+      if (e.active && e.kind === 'oni') e.setVelocityY(-260);   // tossed up by the eruption
+    });
   }
   // ---- ranged: repulsor bolts + Burn DoT ----
   fireBolt() {
@@ -471,6 +525,7 @@ class GameScene extends Phaser.Scene {
     if (p.y > VH + 60 && !st.dead) { st.hp = 0; this.die(); }
     if (st.dead) { p.setVelocityX(p.body.velocity.x * 0.9); return; }
 
+    st.vineCd = Math.max(0, st.vineCd - dt);
     st.invuln = Math.max(0, st.invuln - dt); st.hurtT = Math.max(0, st.hurtT - dt); st.swapCd = Math.max(0, st.swapCd - dt);
     p.setAlpha(st.invuln > 0 && st.hurtT <= 0 ? (Math.floor(time / 60) % 2 ? 0.35 : 1) : 1);
     const onGround = p.body.blocked.down || p.body.touching.down;

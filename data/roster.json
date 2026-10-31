@@ -195,6 +195,20 @@
       "ui": {
         "accent": 3060794,
         "spark": 9567592
+      },
+      "floorVine": {
+        "meta": "assets/sprites/ivy_hd/floor_vine_anim.json",
+        "scale": 0.5,
+        "rangePx": 360,
+        "fallbackPx": 110,
+        "damagePct": 1.4,
+        "widthPx": 44,
+        "cooldownMs": 3500,
+        "telegraphMs": 160,
+        "knockback": 40,
+        "stun": 0.6,
+        "guaranteedPoison": true,
+        "note": "Thorn Eruption (K / X): a thorny vine bursts out of the floor under the nearest enemy within rangePx (either side; Ivy turns to face it), or fallbackPx in front if none. Hits every enemy it touches once per cast for damagePct x ATK (can crit) and always adds 1 Poison stack (Toxic rules: 2% max HP per 1 s tick, uncapped); the normal 50% Toxic roll is not applied on top. Cooldown cooldownMs, shared across tag-swaps."
       }
     }
   ]

@@ -11,6 +11,7 @@ This is a 16-bit multiverse side-scroller prototype built with Phaser 3 (vendore
 | Shift | run |
 | Space / W / ↑ | jump (hold to jump higher) |
 | J / Z | attack (Asagi: katana · Flash: rapid punch combo · Iron Man: hold to fire repulsors, alternating hands · Poison Ivy: vine whip) |
+| K / X | Poison Ivy: Thorn Eruption, a thorny vine bursts out of the floor under the nearest enemy (3.5 s cooldown) |
 | Tab or 1 / 2 / 3 / 4 | tag-swap hero in place (each keeps own HP) |
 | Iron Man | arrows / WASD fly 8-way · Space / Shift boost · no gravity while he's active |
 | F | Flashpoint special: portal, fade, stage restarts (rebirth prototype) |
@@ -36,6 +37,7 @@ Start as Poison Ivy: https://ngtrooper.github.io/multiverse-sidescroller/?hero=P
   - Tag-swapping midair to Asagi or Flash makes them fall; swapping back resumes hovering. More drones were added to the stage.
 - **Poison Ivy (Shtora)** is the fourth hero: a melee fighter with a damage-over-time passive. Her sprites use the same video pipeline: idle (breathing, hair and leaf sway, curling fingers), a catwalk walk cycle, a thorny vine-whip attack from her raised hand that snaps back, and a real hurt flinch. Jump is a placeholder.
   - Vine whip (J/Z): reach about 84px, one hit per enemy per whip.
+  - Thorn Eruption (K/X): a thorny vine bursts out of the floor under the nearest enemy within 360px (or just in front of her), lashes, and sinks back. It hits each enemy it touches once for 1.4× ATK, always adds a Poison stack, reaches flying drones, and has a 3.5s cooldown shown in the HUD. The vine is its own sprite made with the same video pipeline (no character).
   - Toxic: every hit has a 50% chance to add a Poison stack. Stacks have no cap and last until the enemy dies. Every second, each stack deals 2% of the enemy's max HP. You'll see green bubbles, stack pips over the enemy's HP bar and green tick numbers. Poison keeps ticking after you tag her out.
 - The hero stats file ships only the heroes in this build.
 
