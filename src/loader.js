@@ -16,13 +16,17 @@ window.CharacterLoader = {
         faction: stats.Faction, universe: stats.Universe, rarity: stats.Rarity,
         flavor: stats['Flavor Text'], passive: stats.Passive, leader: stats.Leader,
         stats: { atk: stats.Attack, hp: stats.Health, crit, critDmg: stats.CritDmg ?? 1.5, baseDmgPct: stats.BaseDmgPct || 1 },
-        sprite: { dir: entry.sprite.meta.replace(/[^/]*$/, ''), scale: entry.sprite.scale || 1, body: entry.sprite.body, attackArtFacesLeft: !!entry.sprite.attackArtFacesLeft, meta },
+        sprite: { dir: entry.sprite.meta.replace(/[^/]*$/, ''), scale: entry.sprite.scale || 1, body: entry.sprite.body, attackArtFacesLeft: !!entry.sprite.attackArtFacesLeft,
+          muzzle: entry.sprite.muzzle, jets: entry.sprite.jets, meta },
         move: entry.move, attack: entry.attack, fx: entry.fx, ui: entry.ui, momentum: entry.momentum,
+        flight: entry.flight, ranged: entry.ranged, burn: entry.burn,
       };
     }));
-    const w = (want || roster.default).toLowerCase();
-    let idx = party.findIndex(h => h.name.toLowerCase() === w || h.key === w);
-    if (idx < 0) idx = party.findIndex(h => h.name.toLowerCase().includes(w));
+    // ?hero= matches name or key, case/space-insensitive, then by substring (IronMan, ironman, Iron%20Man, flash ...)
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const w = norm(want || roster.default);
+    let idx = party.findIndex(h => norm(h.name) === w || h.key === w);
+    if (idx < 0) idx = party.findIndex(h => norm(h.name).includes(w));
     return { party, idx: Math.max(0, idx) };
   }
 };

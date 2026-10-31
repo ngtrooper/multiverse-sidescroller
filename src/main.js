@@ -1,7 +1,8 @@
 // Rift Runners — test stage. Phaser 3 (vendored), arcade physics.
 // World is laid out in 640x360 "world px"; the canvas is 2x (1280x720) and the camera zooms 2x, so the
 // HD hero sprites (drawn at 0.5 scale) show 1 texel = 1 screen px while the world tiles stay chunky 2x.
-// Party: every roster hero is loaded; Tab / 1 / 2 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Party: every roster hero is loaded; Tab / 1 / 2 / 3 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Flying heroes (roster.flight, e.g. Iron Man) ignore gravity and move 8-way; ranged heroes fire projectiles with Burn DoT.
 const VW = 640, VH = 360, GROUND_Y = 316, WORLD_W = 3600, ZOOM = 2;
 // scrollFactor-0 objects are zoomed around the screen centre; this offset pins them to the top-left
 const UIX = VW * (ZOOM - 1) / 2, UIY = VH * (ZOOM - 1) / 2;
@@ -19,6 +20,11 @@ class GameScene extends Phaser.Scene {
         if (!this.textures.exists(`${h.key}_${name}`))
           this.load.spritesheet(`${h.key}_${name}`, h.sprite.dir + a.sheet, { frameWidth: m.frameWidth, frameHeight: m.frameHeight });
       if (!this.textures.exists(`portrait_${h.key}`)) this.load.image(`portrait_${h.key}`, h.portrait);
+      if (h.ranged && !this.textures.exists(`${h.key}_bolt`)) {
+        this.load.spritesheet(`${h.key}_bolt`, h.sprite.dir + 'repulsor.png', { frameWidth: 56, frameHeight: 24 });
+        this.load.spritesheet(`${h.key}_bolthit`, h.sprite.dir + 'repulsor_hit.png', { frameWidth: 40, frameHeight: 40 });
+        if (!this.textures.exists('burn')) this.load.spritesheet('burn', h.sprite.dir + 'burn.png', { frameWidth: 16, frameHeight: 20 });
+      }
     }
   }
   A(name, h = this.hero) { return `${h.key}:${name}`; }
@@ -61,26 +67,36 @@ class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(120, GROUND_Y - 4, `${this.hero.key}_idle`, 0).setDepth(5);
     this.player.body.setMaxVelocity(520, 900);
     this.physics.add.collider(this.player, this.solids);
-    this.physics.add.collider(this.player, this.oneway);
+    this.physics.add.collider(this.player, this.oneway, null, () => !this.hero.flight);   // flyers pass through one-way platforms
     this.hpStore = Object.fromEntries(this.party.map(h => [h.key, h.stats.hp]));
     this.st = { hp: this.hero.stats.hp, maxHp: this.hero.stats.hp, facing: 1, attacking: false, hitSet: null, invuln: 0, hurtT: 0, jumpT: 0, landT: 0,
       wasGround: true, dead: false, won: false, special: false, swapCd: 0, momentum: 0, trailT: 0 };
     this.applyHero();
-    this.player.on('animationcomplete', (a) => { if (a.key === this.A('attack')) this.st.attacking = false; });
-    this.player.on('animationupdate', (a, f) => { if (a.key === this.A('attack')) this.onAttackFrame(f.index - 1); });
+    this.player.on('animationcomplete', (a) => {
+      if (a.key === this.A('attack') || a.key === this.A('shoot')) { this.st.attacking = false; if (this.hero.ranged) this.st.raisedT = this.hero.ranged.holdMs / 1000; }
+      if (a.key === this.A('lower')) this.st.lowering = false;
+    });
+    this.player.on('animationupdate', (a, f) => {
+      if (this.hero.ranged) { if ((a.key === this.A('attack') || a.key === this.A('shoot')) && f.index - 1 === this.hero.sprite.meta.animations[a.key.split(':')[1]].fireFrame) this.fireBolt(); return; }
+      if (a.key === this.A('attack')) this.onAttackFrame(f.index - 1);
+    });
+    this.bolts = this.physics.add.group({ allowGravity: false });
 
     // ---- enemies ----
     this.enemies = this.physics.add.group({ allowGravity: true });
     this.anims.create({ key: 'oni_walk', frames: this.anims.generateFrameNumbers('oni', { frames: [0, 1] }), frameRate: 5, repeat: -1 });
     this.anims.create({ key: 'drone_fly', frames: this.anims.generateFrameNumbers('drone', { frames: [0, 1] }), frameRate: 10, repeat: -1 });
-    [[620, 'oni'], [980, 'drone'], [1400, 'oni'], [1750, 'oni'], [1900, 'drone'], [2400, 'oni'], [2600, 'drone'], [3000, 'oni'], [3150, 'drone']]
-      .forEach(([x, t]) => this.spawn(t, x));
+    [[620, 'oni'], [980, 'drone'], [1140, 'drone', 150], [1400, 'oni'], [1750, 'oni'], [1900, 'drone'], [2120, 'drone', 140], [2400, 'oni'],
+     [2600, 'drone'], [2820, 'drone', 130], [3000, 'oni'], [3150, 'drone']]
+      .forEach(([x, t, y]) => this.spawn(t, x, y));
     this.physics.add.collider(this.enemies, this.solids);
     this.physics.add.overlap(this.player, this.enemies, (p, e) => this.touchEnemy(e));
+    this.physics.add.overlap(this.bolts, this.enemies, (b, e) => this.boltHit(b, e));
+    this.physics.add.collider(this.bolts, this.solids, (b) => this.boltPop(b));
 
     // ---- camera / input / hud ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 40).setDeadzone(60, 40);
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,SHIFT,R,F,TAB,ONE,TWO');
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,SHIFT,R,F,TAB,ONE,TWO,THREE');
     this.input.keyboard.addCapture('SPACE,UP,DOWN,LEFT,RIGHT,TAB');
     this.buf = { jump: 0, atk: 0 };
     const kb = this.input.keyboard;
@@ -89,6 +105,7 @@ class GameScene extends Phaser.Scene {
     kb.on('keydown-TAB', () => this.swapTo((this.idx + 1) % this.party.length));
     kb.on('keydown-ONE', () => this.swapTo(0));
     kb.on('keydown-TWO', () => this.swapTo(1));
+    kb.on('keydown-THREE', () => this.swapTo(2));
     kb.on('keydown-F', () => this.flashpoint());
     this.makeHud();
     if (this.rebirths) {
@@ -117,21 +134,33 @@ class GameScene extends Phaser.Scene {
       mk(name, name, a, fps);
     }
     // heroes without a run video reuse the walk cycle faster; heroes without a walk video jog with the run cycle
-    if (!an.run) mk('run', 'walk', { ...an.walk }, M.runSpeed * an.walk.frames / (M.runCyclePx || M.walkCyclePx * 1.6));
-    if (!an.walk) mk('walk', 'run', { ...an.run }, M.walkSpeed * an.run.frames / M.runCyclePx);
+    if (an.fly) { mk('run', 'fly', an.fly, an.fly.fps); mk('walk', 'fly', an.fly, an.fly.fps); }   // flyers: dash = fly pose
+    else {
+      if (!an.run) mk('run', 'walk', { ...an.walk }, M.runSpeed * an.walk.frames / (M.runCyclePx || M.walkCyclePx * 1.6));
+      if (!an.walk) mk('walk', 'run', { ...an.run }, M.walkSpeed * an.run.frames / M.runCyclePx);
+    }
+    if (h.ranged) {
+      const k1 = `${h.key}:bolt`, k2 = `${h.key}:bolthit`;
+      if (!this.anims.exists(k1)) this.anims.create({ key: k1, frames: this.anims.generateFrameNumbers(`${h.key}_bolt`, { start: 0, end: 3 }), frameRate: 16, repeat: -1 });
+      if (!this.anims.exists(k2)) this.anims.create({ key: k2, frames: this.anims.generateFrameNumbers(`${h.key}_bolthit`, { start: 0, end: 3 }), frameRate: 20, repeat: 0 });
+      if (!this.anims.exists('burn')) this.anims.create({ key: 'burn', frames: this.anims.generateFrameNumbers('burn', { start: 0, end: 5 }), frameRate: 14, repeat: -1 });
+    }
   }
 
   // put the current hero's textures / origin / hitbox on the shared player body
   applyHero() {
     const h = this.hero, m = h.sprite.meta, p = this.player, B = h.sprite.body;
     const ax = m.anchor.x, ay = (m.anchor.footRow + 1) / m.frameHeight;
-    p.anims.stop(); p.setTexture(`${h.key}_idle`, 0).setOrigin(ax, ay).setScale(h.sprite.scale || 1);
+    p.anims.stop(); p.setTexture(`${h.key}_idle`, 0).setOrigin(ax, ay).setScale(h.sprite.scale || 1).setAngle(0);
+    p.body.setAllowGravity(!h.flight);                     // flyers hover; ground heroes fall when tagged in mid-air
+    if (h.flight) p.setVelocityY(Math.min(0, p.body.velocity.y));
+    Object.assign(this.st, { attacking: false, lowering: false, raisedT: 0, fireCd: 0 });
     p.body.setSize(B.width, B.height).setOffset(m.frameWidth * ax - B.width / 2, m.anchor.footRow + 1 - B.height);
     p.anims.play(this.A('idle'), true);
   }
   swapTo(i) {
     const st = this.st;
-    if (i === this.idx || i >= this.party.length || st.dead || st.special || st.attacking || st.swapCd > 0 || st.won) return;
+    if (i === this.idx || i >= this.party.length || st.dead || st.special || (st.attacking && !this.hero.ranged) || st.swapCd > 0 || st.won) return;
     this.hpStore[this.hero.key] = st.hp;
     const oldX = this.player.x, oldY = this.player.y;
     this.ghost(0xffffff, 0.7, 260);
@@ -145,16 +174,16 @@ class GameScene extends Phaser.Scene {
     if (st.hp <= 0) this.die();
   }
 
-  spawn(type, x) {
+  spawn(type, x, y = 190) {
     let e;
     if (type === 'oni') {
       e = this.enemies.create(x, GROUND_Y - 70, 'oni', 0).setScale(2.5).play('oni_walk');
       e.body.setSize(22, 36).setOffset(4, 2);
       Object.assign(e, { kind: 'oni', hp: 2400, maxHp: 2400, atk: 140, speed: 34, dir: -1, home: x, range: 120 });
     } else {
-      e = this.enemies.create(x, 190, 'drone', 0).setScale(2.5).play('drone_fly');
+      e = this.enemies.create(x, y, 'drone', 0).setScale(2.5).play('drone_fly');
       e.body.setAllowGravity(false); e.body.setSize(18, 16).setOffset(4, 3);
-      Object.assign(e, { kind: 'drone', hp: 1400, maxHp: 1400, atk: 100, speed: 50, dir: -1, home: x, homeY: 190, range: 90, t: Math.random() * 6 });
+      Object.assign(e, { kind: 'drone', hp: 1400, maxHp: 1400, atk: 100, speed: 50, dir: -1, home: x, homeY: y, range: 90, t: Math.random() * 6 });
     }
     e.setDepth(4); e.stun = 0; e.hpBar = this.add.graphics().setDepth(6);
   }
@@ -207,21 +236,99 @@ class GameScene extends Phaser.Scene {
       if (Phaser.Geom.Intersects.RectangleToRectangle(rect, e.getBounds())) { st.hitSet.add(e); this.damageEnemy(e); }
     });
   }
-  damageEnemy(e) {
+  damageEnemy(e, o = {}) {
     const s = this.hero.stats, crit = Math.random() < this.critChance();
-    const dmg = Math.round(s.atk * s.baseDmgPct * (crit ? s.critDmg : 1) * Phaser.Math.FloatBetween(0.9, 1.1));
+    const dmg = Math.round(s.atk * s.baseDmgPct * (o.mult || 1) * (crit ? s.critDmg : 1) * Phaser.Math.FloatBetween(0.9, 1.1));
     if (this.hero.momentum) this.st.momentum++;
-    e.hp -= dmg; e.stun = 0.25;
-    const kb = this.hero.attack.knockback;
-    e.setVelocityX(this.st.facing * kb); if (e.kind === 'oni') e.setVelocityY(-120);
+    e.hp -= dmg; e.stun = o.stun ?? 0.25;
+    const kb = o.knockback ?? this.hero.attack.knockback, dir = o.dir || this.st.facing;
+    e.setVelocityX(dir * kb); if (e.kind === 'oni' && !o.ranged) e.setVelocityY(-120);
     e.anims.pause(); e.setFrame(2);
+    if (this.hero.burn) this.addBurn(e, crit ? 2 : 1);   // Mark VII: Burn on every hit, +1 stack on crit
     this.popText(e.x, e.y - 26, (crit ? '⚡' : '') + dmg, crit ? '#ffe14a' : '#ffffff', crit ? 14 : 11);
     this.sparks(e.x, e.y - 8, this.hero.ui?.spark ?? (crit ? 0x7ff0ff : 0xffffff), crit ? 10 : 6);
-    this.cameras.main.shake(60, crit ? 0.006 : 0.003);
-    this.hitstop(crit ? 70 : this.hero.attack.hitstopMs ?? 45);
+    this.cameras.main.shake(o.ranged ? 40 : 60, crit ? 0.005 : o.ranged ? 0.0015 : 0.003);
+    this.hitstop(crit ? (o.ranged ? 40 : 70) : this.hero.attack.hitstopMs ?? 45);
     if (e.hp <= 0) this.killEnemy(e);
   }
+  // ---- ranged: repulsor bolts + Burn DoT ----
+  fireBolt() {
+    const h = this.hero, p = this.player, st = this.st, R = h.ranged, m = h.sprite.muzzle, f = st.facing;
+    const x = p.x + f * m.x, y = p.y + m.y;
+    const b = this.bolts.create(x, y, `${h.key}_bolt`, 0).setScale(0.5).setDepth(7).setFlipX(f < 0).play(`${h.key}:bolt`);
+    // light aim assist: the palm sits at head height, so bolts bend toward the nearest enemy in a forward cone (±R.aimDeg)
+    let ang = f > 0 ? 0 : Math.PI, best = 1e9;
+    this.enemies.getChildren().forEach(e => {
+      if (!e.active) return;
+      const ex = e.x - x, ey = e.body.center.y - y, d = Math.hypot(ex, ey);
+      if (ex * f <= 10 || d > R.rangePx || d >= best) return;
+      const a = Math.atan2(ey, ex * f); if (Math.abs(a) > Phaser.Math.DegToRad(R.aimDeg)) return;
+      best = d; ang = f > 0 ? a : Math.PI - a;
+    });
+    b.setRotation(f > 0 ? ang : ang - Math.PI);
+    b.body.setSize(14, 14).setOffset(f > 0 ? 38 : 4, 5);   // round head hitbox (body doesn't rotate)
+    b.setVelocity(Math.cos(ang) * R.speed + p.body.velocity.x * 0.3, Math.sin(ang) * R.speed); b.startX = x; b.startY = y; b.dir = f; b.hero = h;
+    st.fireCd = R.cooldownMs / 1000; st.shots = (st.shots || 0) + 1;
+    const fl = this.add.sprite(x, y, `${h.key}_bolthit`, 0).setScale(0.35).setDepth(7).play(`${h.key}:bolthit`);   // muzzle flash
+    fl.once('animationcomplete', () => fl.destroy());
+    p.setVelocityX(p.body.velocity.x - f * 25);   // tiny recoil
+  }
+  boltPop(b) {
+    if (!b.active) return;
+    const fx = this.add.sprite(b.x, b.y, `${b.hero.key}_bolthit`, 0).setScale(0.5).setDepth(8).play(`${b.hero.key}:bolthit`);
+    fx.once('animationcomplete', () => fx.destroy());
+    b.destroy();
+  }
+  boltHit(b, e) {
+    if (!b.active || b.dying || !e.active || b.hero !== this.hero) { if (b.active && b.hero !== this.hero) this.boltPop(b); return; }
+    const R = this.hero.ranged;
+    this.boltPop(b);
+    this.damageEnemy(e, { mult: R.damagePct, knockback: R.knockback, stun: 0.12, dir: b.dir, ranged: true });
+  }
+  addBurn(e, n) {
+    const B = this.hero.burn;
+    if (!e.burn) {
+      e.burn = { stacks: 0, t: 0, tick: B.tickMs / 1000, B, atk: this.hero.stats.atk };
+      e.flame = this.add.sprite(e.x, e.y, 'burn', 0).setScale(0.75).setDepth(6).play('burn');
+    }
+    e.burn.stacks = Math.min(B.maxStacks, e.burn.stacks + n); e.burn.t = B.durationMs / 1000;
+    this.popText(e.x + 14, e.y - 40, `BURN x${e.burn.stacks}`, '#ff9a3c', 8);
+  }
+  updateBurn(e, dt) {
+    const u = e.burn; if (!u) return;
+    u.t -= dt; u.tick -= dt;
+    e.flame.setPosition(e.x + Math.sin(this.time.now / 90) * 2, e.y - e.displayHeight / 2 + 2).setScale(0.6 + 0.08 * u.stacks);
+    if (Math.random() < dt * (4 + u.stacks * 3)) {   // embers
+      const s = this.add.image(e.x + Phaser.Math.Between(-10, 10), e.y + Phaser.Math.Between(-12, 8), 'px').setTint(Math.random() < 0.5 ? 0xff8a1e : 0xffd23f).setDepth(6);
+      this.tweens.add({ targets: s, y: s.y - 16 - Math.random() * 10, alpha: 0, duration: 420, onComplete: () => s.destroy() });
+    }
+    if (u.tick <= 0) {
+      u.tick += u.B.tickMs / 1000;
+      const d = Math.max(1, Math.round(u.atk * u.B.pctAtkPerTick * u.stacks));
+      e.hp -= d; e.setTintFill(0xff8a3c); this.time.delayedCall(60, () => e.active && e.clearTint());
+      this.popText(e.x + Phaser.Math.Between(-8, 8), e.y - 18, '' + d, '#ff8a3c', 9);
+      if (e.hp <= 0) { this.killEnemy(e); return; }
+    }
+    if (u.t <= 0) this.clearBurn(e);
+  }
+  clearBurn(e) { if (e.flame) e.flame.destroy(); e.burn = null; e.flame = null; }
+  thrusterFx(dt, flying) {
+    const h = this.hero, p = this.player, st = this.st, f = st.facing;
+    st.jetT = (st.jetT || 0) - dt; if (st.jetT > 0) return;
+    const boost = st.boost; st.jetT = boost ? 0.016 : flying ? 0.03 : 0.06;
+    const pts = flying ? h.sprite.jets.fly : h.sprite.jets.idle;
+    for (const [jx, jy] of pts) {
+      const x = p.x + f * jx, y = p.y + jy;
+      const s = this.add.image(x + Phaser.Math.Between(-1, 1), y, 'px').setTint(Math.random() < 0.4 ? 0xffffff : Math.random() < 0.6 ? 0x9fe6ff : 0x4a9cf6)
+        .setDepth(4).setScale(boost ? 2 : 1.4);
+      const vx = flying ? -f * (40 + Math.random() * 40) : Phaser.Math.Between(-6, 6), vy = flying ? 20 + Math.random() * 20 : 30 + Math.random() * 30;
+      this.tweens.add({ targets: s, x: x + vx * 0.35 - p.body.velocity.x * 0.12, y: y + vy * 0.35, alpha: 0, scale: 0.5, duration: 260 + Math.random() * 140, onComplete: () => s.destroy() });
+    }
+    if (boost && Math.random() < 0.5) this.ghost(0x7fd8ff, 0.35, 160);
+  }
+
   killEnemy(e) {
+    this.clearBurn(e);
     this.sparks(e.x, e.y - 8, 0xe055b0, 16);
     e.hpBar.destroy(); e.disableBody(true, false);
     this.tweens.add({ targets: e, alpha: 0, scaleY: 0.2, duration: 220, onComplete: () => e.destroy() });
@@ -230,13 +337,13 @@ class GameScene extends Phaser.Scene {
     const st = this.st; if (st.invuln > 0 || st.dead || st.special || !e.active || e.stun > 0) return;
     st.hp -= e.atk; st.invuln = 1.0; st.hurtT = 0.32; st.attacking = false; this.player.setFlipX(st.facing < 0);
     const d = this.player.x < e.x ? -1 : 1;
-    this.player.setVelocity(d * 200, -220);
+    this.player.setVelocity(d * 200, this.hero.flight ? -60 : -220);
     this.player.anims.play(this.A('hurt'), true);
     this.cameras.main.shake(90, 0.008); this.cameras.main.flash(80, 120, 20, 40);
     this.popText(this.player.x, this.player.y - 160, '-' + e.atk, '#ff6a8a', 12);
     if (st.hp <= 0) this.die();
   }
-  die() { const st = this.st; st.dead = true; this.player.setTint(0x9070a0); this.msg.setText('THE RIFT CLAIMED YOU\npress R (or F for a Flashpoint)'); this.player.anims.play(this.A('hurt')); }
+  die() { const st = this.st; st.dead = true; this.player.setAngle(0); this.player.body.setAllowGravity(true); /* a downed flyer drops */ this.player.setTint(0x9070a0); this.msg.setText('THE RIFT CLAIMED YOU\npress R (or F for a Flashpoint)'); this.player.anims.play(this.A('hurt')); }
   hitstop(ms) { this.physics.world.pause(); this.anims.pauseAll(); this.time.delayedCall(ms, () => { this.physics.world.resume(); this.anims.resumeAll(); }); }
   popText(x, y, s, col, size) {
     const t = this.add.text(x, y, s, { fontFamily: 'monospace', fontSize: size + 'px', color: col, stroke: '#140812', strokeThickness: 3 }).setOrigin(0.5).setDepth(15);
@@ -285,7 +392,8 @@ class GameScene extends Phaser.Scene {
     st.special = true; st.attacking = false; st.hurtT = 0; this.msg.setText('');
     if (st.dead) { st.dead = false; p.clearTint(); }
     p.setAlpha(1).setVelocity(0, 0); p.setFlipX(st.facing < 0);
-    const dir = st.facing, portalX = p.x + dir * 190, portalY = GROUND_Y - 66;
+    const dir = st.facing, portalX = p.x + dir * 190, portalY = h.flight ? Math.min(GROUND_Y - 66, p.y - 66) : GROUND_Y - 66;
+    p.setAngle(0); if (h.flight) p.y = Math.min(p.y, portalY + 66);
     const portal = this.add.sprite(portalX, portalY, 'tportal', 0).setScale(0).setDepth(6).play('tportal');
     portal.setFlipX(dir < 0);
     const an = h.sprite.meta.animations.special;
@@ -332,7 +440,8 @@ class GameScene extends Phaser.Scene {
     const jumpPressed = this.buf.jump > 0, atkPressed = this.buf.atk > 0;
     const running = K.SHIFT.isDown;
 
-    if (!st.won && Math.abs(p.x - this.goal.x) < 20 && onGround) { st.won = true; this.msg.setText('RIFT SEALED\nstage clear — press R'); }
+    if (!st.won && Math.abs(p.x - this.goal.x) < 20 && (onGround || (h.flight && Math.abs(p.y - GROUND_Y) < 90))) { st.won = true; this.msg.setText('RIFT SEALED\nstage clear — press R'); }
+    if (h.flight) { this.updateFlight(dt, time, left, right, atkPressed); return; }
     if (st.hurtT > 0) { this.applyFriction(onGround, dt); return; }
 
     const mirrorAtk = !!h.sprite.attackArtFacesLeft;   // Asagi's attack take slashes toward image-left
@@ -368,6 +477,43 @@ class GameScene extends Phaser.Scene {
     else if (vx > 12) this.playLoop('walk', vx / h.move.walkSpeed);
     else this.playLoop('idle', 1);
   }
+  // ---- flying hero: no gravity, 8-way accel/drag, idle bob, hold-to-fire repulsors ----
+  updateFlight(dt, time, left, right, atkPressed) {
+    const p = this.player, st = this.st, K = this.keys, h = this.hero, F = h.flight, R = h.ranged;
+    const up = K.UP.isDown || K.W.isDown, down = K.DOWN.isDown || K.S.isDown;
+    st.fireCd = Math.max(0, (st.fireCd || 0) - dt); st.raisedT = Math.max(0, (st.raisedT || 0) - dt);
+    if (st.hurtT > 0) { p.setVelocity(p.body.velocity.x * (1 - dt * 3), p.body.velocity.y * (1 - dt * 3)); p.setAngle(0); return; }
+    let dx = (right ? 1 : 0) - (left ? 1 : 0), dy = (down ? 1 : 0) - (up ? 1 : 0);
+    if (dx && !st.attacking && st.raisedT <= 0) st.facing = dx;
+    st.boost = (K.SPACE.isDown || K.SHIFT.isDown) && (dx || dy) && !st.attacking;
+    const n = Math.hypot(dx, dy) || 1, sp = st.boost ? F.boostSpeed : F.speed * (st.attacking ? 0.75 : 1);
+    const bob = (dy === 0) ? Math.cos(time / 1000 * Math.PI * 2 * F.bobHz) * F.bobPx * Math.PI * 2 * F.bobHz : 0;   // gentle hover bob
+    const tx = dx / n * sp, ty = dy / n * sp + bob;
+    const kx = dx ? F.accel : F.drag, ky = dy ? F.accel : F.drag;
+    p.setVelocity(Phaser.Math.Linear(p.body.velocity.x, tx, Math.min(1, dt * kx)), Phaser.Math.Linear(p.body.velocity.y, ty, Math.min(1, dt * ky)));
+    // stay inside the level: ceiling, side walls, never below the bottom of a pit
+    if (p.y < F.ceilingY) { p.y = F.ceilingY; if (p.body.velocity.y < 0) p.setVelocityY(0); }
+    if (p.y > VH - 4) { p.y = VH - 4; if (p.body.velocity.y > 0) p.setVelocityY(0); }
+    p.x = Phaser.Math.Clamp(p.x, 24, WORLD_W - 24);
+    // fire: tap or hold J/Z
+    const held = K.J.isDown || K.Z.isDown;
+    if ((atkPressed || held) && !st.attacking && st.fireCd <= 0.12) {
+      this.buf.atk = 0; st.attacking = true; st.lowering = false;
+      p.anims.play(this.A(st.raisedT > 0 ? 'shoot' : 'attack'), true);
+    }
+    p.setFlipX(st.facing < 0);
+    const vx = p.body.velocity.x, vy = p.body.velocity.y, flying = Math.abs(vx) > 70 && !st.attacking && st.raisedT <= 0 && !st.lowering;
+    const tilt = Phaser.Math.Clamp(vy / F.speed, -1, 1) * F.maxTiltDeg * st.facing * (flying ? 1 : 0.5);
+    p.setAngle(Phaser.Math.Linear(p.angle, tilt, Math.min(1, dt * 8)));
+    this.thrusterFx(dt, flying);
+    if (st.attacking || st.raisedT > 0) return;
+    if (!st.lowering && p.anims.currentAnim && (p.anims.currentAnim.key === this.A('attack') || p.anims.currentAnim.key === this.A('shoot'))) {
+      st.lowering = true; p.anims.play(this.A('lower'), true); return;
+    }
+    if (st.lowering && !flying) return;
+    st.lowering = false;
+    if (flying) this.playLoop('fly', 1); else this.playLoop('idle', 1);
+  }
   playLoop(name, rate) {
     const p = this.player, key = this.A(name);
     if (p.anims.currentAnim?.key !== key || !p.anims.isPlaying) p.anims.play(key, true);
@@ -377,9 +523,15 @@ class GameScene extends Phaser.Scene {
 
   updateEnemies(dt) {
     const p = this.player;
+    this.bolts.getChildren().slice().forEach(b => {
+      if (!b.dying && (Math.hypot(b.x - b.startX, b.y - b.startY) > b.hero.ranged.rangePx || b.x < 0 || b.x > WORLD_W)) {   // fade out at max range
+        b.dying = true; b.body.enable = false; this.tweens.add({ targets: b, alpha: 0, scaleX: 0.2, duration: 90, onComplete: () => b.destroy() });
+      }
+    });
     this.enemies.getChildren().forEach(e => {
       if (!e.active || !e.body) return;
       e.stun = Math.max(0, e.stun - dt);
+      this.updateBurn(e, dt); if (!e.active || !e.body) return;
       if (e.stun <= 0 && !e.anims.isPlaying) e.anims.resume?.() || e.play(e.kind === 'oni' ? 'oni_walk' : 'drone_fly');
       if (e.stun <= 0) {
         if (e.kind === 'oni') {
@@ -397,7 +549,7 @@ class GameScene extends Phaser.Scene {
         }
       } else if (e.kind === 'drone') e.setVelocity(e.body.velocity.x * 0.9, e.body.velocity.y * 0.9);
       e.setFlipX(e.dir > 0);
-      if (e.y > VH + 80) { e.hpBar.destroy(); e.destroy(); return; }
+      if (e.y > VH + 80) { this.clearBurn(e); e.hpBar.destroy(); e.destroy(); return; }
       const g = e.hpBar; g.clear();
       if (e.hp < e.maxHp) { const w = 24, x = e.x - 12, y = e.y - e.displayHeight / 2 - 6; g.fillStyle(0x140812).fillRect(x - 1, y - 1, w + 2, 4); g.fillStyle(0xff3a6e).fillRect(x, y, w * e.hp / e.maxHp, 2); }
     });

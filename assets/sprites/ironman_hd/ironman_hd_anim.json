@@ -1,0 +1,181 @@
+{
+ "frameWidth": 419,
+ "frameHeight": 434,
+ "anchor": {
+  "x": 0.5293,
+  "y": 0.7258,
+  "footRow": 314
+ },
+ "cols": 8,
+ "scale": 0.5245,
+ "bodyHeightPx": 300,
+ "paletteSize": 96,
+ "animations": {
+  "idle": {
+   "sheet": "ironman_idle.png",
+   "frames": 24,
+   "loop": true,
+   "fps": 8,
+   "source": "ironman_idle_v1.mp4",
+   "sourceFrames": [
+    1,
+    5,
+    9,
+    13,
+    17,
+    21,
+    25,
+    29,
+    33,
+    37,
+    41,
+    45,
+    49,
+    53,
+    57,
+    61,
+    65,
+    69,
+    73,
+    77,
+    81,
+    85,
+    89,
+    93
+   ]
+  },
+  "fly": {
+   "sheet": "ironman_fly.png",
+   "frames": 24,
+   "loop": true,
+   "fps": 12,
+   "source": "ironman_fly_v1.mp4",
+   "sourceFrames": [
+    1,
+    4,
+    7,
+    10,
+    13,
+    16,
+    19,
+    22,
+    25,
+    28,
+    31,
+    34,
+    37,
+    40,
+    43,
+    46,
+    49,
+    52,
+    55,
+    58,
+    61,
+    64,
+    67,
+    70
+   ]
+  },
+  "attack": {
+   "sheet": "ironman_attack.png",
+   "frames": 12,
+   "loop": false,
+   "durationsMs": [
+    35,
+    35,
+    35,
+    35,
+    40,
+    45,
+    50,
+    60,
+    50,
+    45,
+    45,
+    45
+   ],
+   "fireFrame": 7,
+   "source": "ironman_attack_v1.mp4",
+   "sourceFrames": [
+    1,
+    5,
+    9,
+    13,
+    17,
+    19,
+    21,
+    23,
+    25,
+    27,
+    29,
+    31
+   ]
+  },
+  "shoot": {
+   "sheet": "ironman_shoot.png",
+   "frames": 6,
+   "loop": false,
+   "durationsMs": [
+    50,
+    60,
+    50,
+    45,
+    45,
+    50
+   ],
+   "fireFrame": 1,
+   "source": "ironman_attack_v1.mp4",
+   "sourceFrames": [
+    21,
+    23,
+    25,
+    27,
+    29,
+    31
+   ]
+  },
+  "lower": {
+   "sheet": "ironman_lower.png",
+   "frames": 9,
+   "loop": false,
+   "durationsMs": [
+    45,
+    45,
+    45,
+    45,
+    45,
+    45,
+    45,
+    45,
+    45
+   ],
+   "source": "ironman_attack_v1.mp4",
+   "sourceFrames": [
+    33,
+    37,
+    41,
+    45,
+    49,
+    55,
+    61,
+    67,
+    73
+   ]
+  },
+  "jump": {
+   "sheet": "ironman_jump.png",
+   "frames": 2,
+   "loop": false,
+   "fps": 8,
+   "note": "fly frame + hover frame; unused while flying; placeholder"
+  },
+  "hurt": {
+   "sheet": "ironman_hurt.png",
+   "frames": 1,
+   "loop": false,
+   "fps": 8,
+   "note": "idle frame 0; game tints/knocks back; placeholder"
+  }
+ }
+}

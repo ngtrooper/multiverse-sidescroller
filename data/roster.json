@@ -1,5 +1,5 @@
 {
-  "comment": "Playable heroes (party order = Tab/1/2). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left.",
+  "comment": "Playable heroes (party order = Tab/1/2/3). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/jet offsets are world px from the feet anchor, facing right).",
   "default": "Asagi Igawa",
   "heroes": [
     {
@@ -72,6 +72,86 @@
         "perHit": 0.02,
         "max": 0.3,
         "note": "Momentum Building adapted for real-time: +2% crit per landed hit, max +30%, resets on swap/stage"
+      }
+    },
+    {
+      "name": "Iron Man MK VII",
+      "key": "ironman",
+      "portrait": "assets/portraits/ironman_face.png",
+      "sprite": {
+        "meta": "assets/sprites/ironman_hd/ironman_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 56,
+          "height": 270
+        },
+        "muzzle": {
+          "x": 38,
+          "y": -134
+        },
+        "jets": {
+          "idle": [
+            [
+              -23,
+              2
+            ],
+            [
+              24,
+              2
+            ]
+          ],
+          "fly": [
+            [
+              -64,
+              6
+            ]
+          ]
+        }
+      },
+      "flight": {
+        "speed": 150,
+        "boostSpeed": 270,
+        "accel": 6,
+        "drag": 4,
+        "bobPx": 3,
+        "bobHz": 0.55,
+        "ceilingY": 158,
+        "maxTiltDeg": 7
+      },
+      "ranged": {
+        "damagePct": 0.55,
+        "speed": 430,
+        "rangePx": 300,
+        "cooldownMs": 380,
+        "holdMs": 200,
+        "knockback": 60,
+        "aimDeg": 40
+      },
+      "burn": {
+        "pctAtkPerTick": 0.05,
+        "tickMs": 500,
+        "durationMs": 2000,
+        "maxStacks": 5,
+        "note": "Mark VII passive: +1 Burn stack per hit, +1 more on crit; each tick deals stacks x 5% ATK; refreshes on hit"
+      },
+      "move": {
+        "walkSpeed": 150,
+        "runSpeed": 270,
+        "jumpVelocity": 0,
+        "airControl": 1
+      },
+      "attack": {
+        "reach": 0,
+        "height": 0,
+        "knockback": 60,
+        "hitstopMs": 20
+      },
+      "fx": {
+        "thrusters": true
+      },
+      "ui": {
+        "accent": 13117486,
+        "spark": 10479359
       }
     }
   ]

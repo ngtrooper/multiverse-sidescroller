@@ -16,6 +16,20 @@
    "BaseDmgPct": 1
   },
   {
+   "Name": "Iron Man MK VII",
+   "Rarity": "Unique",
+   "Faction": "Avenger",
+   "Universe": "Marvel",
+   "Attack": 600,
+   "Health": 800,
+   "CritChance": 0.15,
+   "CritDmg": 1,
+   "Flavor Text": "I am Iron Man.",
+   "Passive": "Mark VII | Applies Burn on every hit. On crit, applies an additional Burn stack.",
+   "Leader": "Avenger Initiative | +10% ATK and +15% HP to all Avenger allies.",
+   "BaseDmgPct": 1
+  },
+  {
    "Name": "Asagi Igawa",
    "Rarity": "Unique",
    "Faction": "Taimanin",
