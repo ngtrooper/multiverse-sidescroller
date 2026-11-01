@@ -50,6 +50,12 @@ class GameScene extends Phaser.Scene {
       this.load.spritesheet('hydra_bolt', E.bolt.sheet, { frameWidth: E.bolt.frameWidth, frameHeight: E.bolt.frameHeight });
       this.load.spritesheet('hydra_flash', E.bolt.flash, { frameWidth: E.bolt.flashSize, frameHeight: E.bolt.flashSize });
     }
+    if (!this.cache.json.exists('structures')) {   // spawn gate + hero base (tools/make_structures.py)
+      const D = 'assets/sprites/structures/';
+      this.load.json('structures', D + 'structures.json');
+      [['st_gate', 'spawn_gate'], ['st_gate_lamps', 'spawn_gate_lamps'], ['st_gate_cond', 'spawn_gate_conduits'], ['st_rift_loop', 'rift_loop'],
+       ['st_rift_burst', 'rift_burst'], ['st_base', 'hero_base'], ['st_base_anim', 'hero_base_anim']].forEach(([k, f]) => this.load.image(k, D + f + '.png'));
+    }
   }
   A(name, h = this.hero) { return `${h.key}:${name}`; }
   // ranged heroes with *_alt sheets fire with alternating hands: hand 0 = attack/shoot/lower, hand 1 = *_alt
@@ -84,15 +90,15 @@ class GameScene extends Phaser.Scene {
     [[360, 250, 96], [520, 200, 80], [700, 240, 112], [1060, 236, 128], [1320, 220, 96], [1480, 170, 96], [1660, 230, 128],
      [1990, 240, 160], [2300, 220, 96], [2480, 180, 112], [2700, 236, 96], [2900, 200, 128]].forEach(a => plat(...a));
 
-    // goal rift portal
     // Tex.all regenerates these textures on every (re)start, so their anims must be rebuilt too
-    ['portal', 'oni_walk', 'drone_fly'].forEach(k => this.anims.remove(k));
-    this.anims.create({ key: 'portal', frames: this.anims.generateFrameNumbers('portal', { start: 0, end: 3 }), frameRate: 8, repeat: -1 });
-    this.goal = this.physics.add.staticSprite(WORLD_W - 120, GROUND_Y - 36, 'portal', 0).play('portal');
+    ['oni_walk', 'drone_fly'].forEach(k => this.anims.remove(k));
+    // ---- structures: hero base (start / tag-in / rebirth point) and the enemy spawn gate (goal: seal it) ----
+    makeStructures(this);
+    this.goal = this.gate;
 
     // ---- player ----
     this.party.forEach(h => this.makeAnims(h));
-    this.player = this.physics.add.sprite(120, GROUND_Y - 4, `${this.hero.key}_idle`, 0).setDepth(5);
+    this.player = this.physics.add.sprite(this.base.doorX, GROUND_Y - 4, `${this.hero.key}_idle`, 0).setDepth(5);
     this.player.body.setMaxVelocity(520, 900);
     this.physics.add.collider(this.player, this.solids);
     this.physics.add.collider(this.player, this.oneway, null, () => !this.hero.flight);   // flyers pass through one-way platforms
@@ -118,8 +124,10 @@ class GameScene extends Phaser.Scene {
     this.ebolts = this.physics.add.group({ allowGravity: false });
     // Hydra Grunts replace the old placeholder oni on the ground; two Elites guard the back half. Drones unchanged.
     [[620, 'hydra'], [980, 'drone'], [1140, 'drone', 150], [1400, 'hydra'], [1750, 'hydra'], [1900, 'drone'], [2120, 'drone', 140], [2400, 'elite'],
-     [2600, 'drone'], [2820, 'drone', 130], [3000, 'hydra'], [3200, 'elite']]
+     [2600, 'drone']]
       .forEach(([x, t, y]) => this.spawn(t, x, y));
+    // the last three come out of the spawn gate as one wave when the hero gets close (same enemies / homes as before)
+    this.gateWave = { at: 2550, done: false, list: [['drone', 2820, 130], ['hydra', 3000], ['elite', 3200]] };
     this.physics.add.collider(this.enemies, this.solids);
     this.physics.add.overlap(this.player, this.enemies, (p, e) => this.touchEnemy(e));
     this.physics.add.overlap(this.bolts, this.enemies, (b, e) => this.boltHit(b, e));
@@ -142,11 +150,62 @@ class GameScene extends Phaser.Scene {
     kb.on('keydown-F', () => this.flashpoint());
     ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castSpecial()));   // Ivy: Thorn Eruption · Robot: drones
     this.makeHud();
+    this.heroEmerge();
     if (this.rebirths) {
       this.msg.setText(`FLASHPOINT #${this.rebirths}\ntimeline rewritten`);
       this.time.delayedCall(1800, () => { if (!this.st.dead && !this.st.won) this.msg.setText(''); });
       this.cameras.main.fadeIn(500, 255, 240, 200);
     }
+  }
+
+  // ---------------- structures ----------------
+  heroEmerge() {   // the hero steps out of the base's door on start / rebirth: core flare + white fade-in
+    const p = this.player, B = this.base;
+    p.setTintFill(0xfff6c8).setAlpha(0.2);
+    this.tweens.add({ targets: p, alpha: 1, duration: 420, onComplete: () => { if (!this.st.dead) p.clearTint(); } });
+    this.time.delayedCall(260, () => { if (p.isTintFill && !this.st.dead) p.clearTint(); });
+    B.flare(1);
+    this.sparks(B.doorX, GROUND_Y - 50, 0xfff2a0, 10);
+  }
+  updateStructures(dt, time) {
+    const G = this.gate, W = this.gateWave, t = time / 1000;
+    // gate lights: slow blink idle, fast strobe while it is spawning / bursting, off once sealed
+    const hot = G.hotT > 0; G.hotT = Math.max(0, G.hotT - dt);
+    if (!G.sealed) {
+      G.lamps.setAlpha(hot ? (Math.floor(t * 10) % 2 ? 1 : 0.25) : (Math.floor(t * 1.4) % 2 ? 0.95 : 0.35));
+      G.cond.setAlpha(hot ? 0.95 : 0.35 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.6)));
+    }
+    this.base.core.setAlpha(this.base.coreBase + 0.12 * Math.sin(t * 3.1));
+    if (!W.done && !this.st.dead && this.player.x > W.at) {
+      W.done = true;
+      W.list.forEach(([type, home, y], i) => this.time.delayedCall(250 + i * 1100, () => this.gateSpawn(type, home, y)));
+    }
+  }
+  gateBurst() {
+    const G = this.gate; if (G.sealed) return;
+    G.hotT = 1.3; G.rift.play('st:rift_burst', true);
+    this.cameras.main.shake(160, 0.003);
+    this.sparks(G.cx, G.cy, 0x9dff7a, 10); this.sparks(G.cx, G.cy, 0xc070ff, 10);
+  }
+  gateSpawn(type, home, y) {   // enemy fades / steps out of the rift, then walks (or flies) to its old post
+    const G = this.gate; if (G.sealed || this.st.won) return;
+    this.gateBurst();
+    const n = this.enemies.getLength();
+    this.spawn(type, G.x, type === 'drone' ? G.cy - 20 : y);
+    const e = this.enemies.getChildren()[n]; if (!e) return;
+    e.home = home; if (type === 'drone') e.homeY = y;
+    e.emerge = e.emergeT = type === 'drone' ? 0.8 : 1.1;
+    e.setAlpha(0.3).setTint(0xe6b8ff).setDepth(1.05);   // behind the gate frame while it steps out
+    this.time.delayedCall(e.emergeT * 1000 * 0.75, () => e.active && e.setDepth(4));
+  }
+  sealGate() {
+    const G = this.gate; if (G.sealed) return; G.sealed = true;
+    G.rift.play('st:rift_burst', true);
+    this.cameras.main.flash(260, 200, 140, 255); this.cameras.main.shake(260, 0.004);
+    this.sparks(G.cx, G.cy, 0xffffff, 18); this.sparks(G.cx, G.cy, 0x9dff7a, 14);
+    this.tweens.add({ targets: G.rift, scaleX: 0, alpha: 0, delay: 350, duration: 520, ease: 'Back.easeIn' });
+    this.tweens.add({ targets: [G.lamps, G.cond], alpha: 0, duration: 700 });
+    this.player.setDepth(5);
   }
 
   makeAnims(h) {
@@ -508,7 +567,7 @@ class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: e, alpha: 0, scaleY: 0.2, duration: 220, onComplete: () => e.destroy() });
   }
   touchEnemy(e) {
-    if (!e.active || e.dying || e.stun > 0) return;
+    if (!e.active || e.dying || e.stun > 0 || e.emerge > 0) return;
     this.hurtPlayer(e.atk, e.x);
   }
   hurtPlayer(dmg, srcX, kb = 1) {
@@ -691,7 +750,7 @@ class GameScene extends Phaser.Scene {
     this.par.forEach(l => l.s.tilePositionX = cam.scrollX * l.f);
     this.drawHud(dt);
     if (Phaser.Input.Keyboard.JustDown(K.R)) { this.scene.restart({ party: this.party, idx: this.idx }); return; }
-    this.updateEnemies(dt); this.updateDrones(dt);
+    this.updateEnemies(dt); this.updateDrones(dt); this.updateStructures(dt, time);
     if (st.special) { if (this.dashFx) this.speedFx(dt, true); return; }
     if (p.y > VH + 60 && !st.dead) { st.hp = 0; this.die(); }
     if (st.dead) { p.setVelocityX(p.body.velocity.x * 0.9); return; }
@@ -706,7 +765,7 @@ class GameScene extends Phaser.Scene {
     const jumpPressed = this.buf.jump > 0, atkPressed = this.buf.atk > 0;
     const running = K.SHIFT.isDown;
 
-    if (!st.won && Math.abs(p.x - this.goal.x) < 20 && (onGround || (h.flight && Math.abs(p.y - GROUND_Y) < 90))) { st.won = true; this.msg.setText('RIFT SEALED\nstage clear — press R'); }
+    if (!st.won && Math.abs(p.x - this.goal.x) < 20 && (onGround || (h.flight && Math.abs(p.y - GROUND_Y) < 90))) { st.won = true; this.msg.setText('RIFT SEALED\nstage clear — press R'); this.sealGate(); }
     if (h.flight) { this.updateFlight(dt, time, left, right, atkPressed); return; }
     if (st.hurtT > 0) { this.applyFriction(onGround, dt); return; }
 
@@ -801,6 +860,10 @@ class GameScene extends Phaser.Scene {
     const dx = p.x - e.x, adx = Math.abs(dx), alive = !st.dead && !st.special && !st.won;
     const aggro = alive && adx < T.aggroPx && p.y > GROUND_Y - 330;
     let vx = 0, anim = 'idle';
+    if (e.emerge > 0 && onGround && e.stun <= 0 && e.hurtT <= 0) {   // stepping out of the spawn gate
+      e.dir = -1; e.setVelocityX(-T.walkSpeed * 0.7); if (e.anims.currentAnim?.key !== `${e.pre}:walk`) e.play(`${e.pre}:walk`, true);
+      e.setFlipX(true); this.drawEnemyBar(e); return;
+    }
     if (e.stun > 0 || e.hurtT > 0 || !onGround) {
       e.setVelocityX(e.body.velocity.x * (onGround ? 0.85 : 0.98));
       e.setFlipX(e.dir < 0); this.drawEnemyBar(e); return;   // hurt anim / knockback plays out
@@ -850,6 +913,7 @@ class GameScene extends Phaser.Scene {
     this.enemies.getChildren().forEach(e => {
       if (!e.active || !e.body || e.dying) return;
       e.stun = Math.max(0, e.stun - dt);
+      if (e.emerge > 0) { e.emerge -= dt; const k = Phaser.Math.Clamp(1 - e.emerge / e.emergeT, 0, 1); e.setAlpha(0.3 + 0.7 * k); if (e.emerge <= 0) { e.clearTint(); e.setAlpha(1); } }
       if (e.kind === 'hydra') { this.updateHydra(e, dt); return; }
       this.updateBurn(e, dt); if (!e.active || !e.body) return;
       this.updatePoison(e, dt); if (!e.active || !e.body) return;
@@ -926,3 +990,54 @@ function makeTimePortal(scene) {
   });
   window.game.scene.add('game', GameScene, true, party);
 })();
+
+// spawn gate + hero base (art: tools/make_structures.py). All textures are drawn at 0.5 like the HD heroes (1 texel = 1 screen px).
+function makeStructures(scene) {
+  const S = scene.cache.json.get('structures'), sc = 0.5;
+  const frames = (tex, prefix, n, cols, fw, fh, ox = 0, oy = 0) => {
+    const T = scene.textures.get(tex);
+    for (let k = 0; k < n; k++) if (!T.has(prefix + k)) T.add(prefix + k, 0, ox + (k % cols) * fw, oy + Math.floor(k / cols) * fh, fw, fh);
+    return [...Array(n).keys()].map(k => ({ key: tex, frame: prefix + k }));
+  };
+  // ---- hero base: static building + per-region animated patches (flags, time core, lights) from the idle video ----
+  const B = S.base, BA = B.anim, bx = 170, left = bx - B.width * sc * B.anchor.x, top = GROUND_Y - B.height * sc * B.anchor.y;
+  scene.add.image(bx, GROUND_Y + 1, 'st_base').setOrigin(B.anchor.x, B.anchor.y).setScale(sc).setDepth(1);
+  BA.patches.forEach((P, i) => {
+    const key = 'st:base_p' + i;
+    if (!scene.anims.exists(key)) scene.anims.create({ key, frames: [...Array(BA.frames).keys()].map((k) => {
+      const T = scene.textures.get('st_base_anim'), name = `q${i}_${k}`;
+      if (!T.has(name)) T.add(name, 0, (k % BA.cols) * BA.blockW, Math.floor(k / BA.cols) * BA.blockH + P.oy, P.w, P.h);
+      return { key: 'st_base_anim', frame: name };
+    }), frameRate: BA.fps, repeat: -1 });
+    scene.add.sprite(left + P.x * sc, top + 1 + P.y * sc, 'st_base_anim').setOrigin(0).setScale(sc).setDepth(1.01).play(key);
+  });
+  const cx = left + B.core[0] * sc, cy = top + 1 + B.core[1] * sc;
+  const core = scene.add.image(cx, cy, makeGlowTex(scene, 'st_coreglow', 34, [255, 214, 90])).setBlendMode(Phaser.BlendModes.ADD).setDepth(1.02).setAlpha(0.25);
+  scene.base = { x: bx, doorX: bx, core, coreBase: 0.22,
+    flare(k) { scene.tweens.add({ targets: core, scale: { from: 1 + 0.8 * k, to: 1 }, duration: 700, ease: 'Quad.easeOut' }); this.coreBase = 0.9; scene.tweens.add({ targets: this, coreBase: 0.22, duration: 900 }); } };
+  // ---- spawn gate: rift (behind) + frame + additive lamp / conduit glow ----
+  const G = S.gate, R = G.rift, gx = WORLD_W - 120, gl = gx - G.width * sc * G.anchor.x, gt = GROUND_Y + 1 - G.height * sc * G.anchor.y;
+  if (!scene.anims.exists('st:rift_loop')) {
+    scene.anims.create({ key: 'st:rift_loop', frames: frames('st_rift_loop', 'f', R.loop.frames, R.loop.cols, R.frameWidth, R.frameHeight), frameRate: R.loop.fps, repeat: -1 });
+    scene.anims.create({ key: 'st:rift_burst', frames: frames('st_rift_burst', 'f', R.burst.frames, R.burst.cols, R.frameWidth, R.frameHeight), frameRate: R.burst.fps, repeat: 0 });
+  }
+  const rift = scene.add.sprite(gl + (R.x + R.frameWidth / 2) * sc, gt + (R.y + R.frameHeight / 2) * sc, 'st_rift_loop').setScale(sc).setDepth(1).play('st:rift_loop');
+  rift.on('animationcomplete', (a) => { if (a.key === 'st:rift_burst' && !scene.gate.sealed) rift.play('st:rift_loop'); });
+  scene.add.image(gx, GROUND_Y + 1, 'st_gate').setOrigin(G.anchor.x, G.anchor.y).setScale(sc).setDepth(1.1);
+  const lamps = scene.add.image(gx, GROUND_Y + 1, 'st_gate_lamps').setOrigin(G.anchor.x, G.anchor.y).setScale(sc).setDepth(1.12).setBlendMode(Phaser.BlendModes.ADD);
+  const cond = scene.add.image(gx, GROUND_Y + 1, 'st_gate_cond').setOrigin(G.anchor.x, G.anchor.y).setScale(sc).setDepth(1.12).setBlendMode(Phaser.BlendModes.ADD);
+  scene.gate = { x: gx, cx: gl + R.center[0] * sc, cy: gt + R.center[1] * sc, rift, lamps, cond, hotT: 0, sealed: false };
+}
+// round dithered pixel glow (hard alpha steps), used additively over the base's time core
+function makeGlowTex(scene, key, r, [cr, cg, cb]) {
+  if (scene.textures.exists(key)) return key;
+  const N = r * 2, cv = scene.textures.createCanvas(key, N, N), ctx = cv.getContext(), id = ctx.createImageData(N, N);
+  const BY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const d = Math.hypot(x - r + 0.5, y - r + 0.5) / r, v = Math.max(0, 1 - d) ** 1.4;
+    const lv = Math.min(3, Math.floor(v * 4 + BY[(y & 3) * 4 + (x & 3)] / 16)), i = (y * N + x) * 4;
+    if (lv <= 0) continue;
+    id.data[i] = cr; id.data[i + 1] = cg; id.data[i + 2] = cb; id.data[i + 3] = [0, 70, 140, 220][lv];
+  }
+  ctx.putImageData(id, 0, 0); cv.refresh(); return key;
+}

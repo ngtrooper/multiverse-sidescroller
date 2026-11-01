@@ -23,7 +23,10 @@ Start as Poison Ivy: https://ngtrooper.github.io/multiverse-sidescroller/?hero=P
 Start as Robot: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Robot
 
 ## What's in this build
-- One test stage with parallax, one-way platforms, gaps, Hydra gunners and drone enemies, an HP HUD, crits and a goal portal.
+- One test stage with parallax, one-way platforms, gaps, Hydra gunners and drone enemies, an HP HUD and crits.
+- **Hero base and enemy spawn gate** (16-bit structures in the same style as the heroes):
+  - The heroes' outpost at the left is where you start and come back after a Flashpoint. The hero appears at its door. Its flags flutter, the time core pulses, and the lights blink.
+  - The Hydra-tech rift gate at the right end has a swirling purple and green rift with blinking warning lamps. When you get close it bursts and the last wave (a drone, a Grunt and an Elite) steps out of it. Reach its centre to seal the rift and clear the stage.
 - Asagi's sprites come from image-to-video animation. Each clip is keyed off a magenta background, the feet are stabilised, and the frames are reduced to a locked 96-colour palette with a 1px outline. In game she is drawn at a 300px body height, so 1 texel = 1 screen pixel on the 1280x720 canvas.
   - idle, walk and attack each come from their own generated video clip.
   - run reuses the walk cycle at a higher rate.
