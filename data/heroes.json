@@ -100,6 +100,26 @@
    "Pack": "Invincible Booster Pack|Regular Booster Pack",
    "BaseDmgPct": 1,
    "ShopPrice": 100000
+  },
+  {
+   "Name": "Sakura Igawa",
+   "Rarity": "Epic",
+   "Alignment": "Hero",
+   "Faction": "Taimanin",
+   "Universe": "Action Taimanin",
+   "Race": "Human",
+   "Attack": 380,
+   "Health": 720,
+   "CritChance": 0.15,
+   "CritDmg": 1,
+   "Flavor Text": "I'll prove I can keep up with Sis.",
+   "art": "Sakura Igawa.jpg",
+   "Passive": "",
+   "Leader": "",
+   "Description": "Asagi's younger sister and a Taimanin operative still carving out her own identity in her sibling's formidable shadow. Sakura has trained relentlessly to prove herself as more than just the lesser-known Igawa, developing a fierce fighting style that channels her determination into every strike. She idolizes Asagi while simultaneously burning to surpass her, a rivalry that drives constant growth. Those who underestimate her because of her age tend to learn their mistake quickly.",
+   "Pack": "Regular Booster Pack",
+   "BaseDmgPct": 1,
+   "ShopPrice": 500000
   }
  ]
 }

@@ -1,7 +1,7 @@
 // Rift Runners — test stage. Phaser 3 (vendored), arcade physics.
 // World is laid out in 640x360 "world px"; the canvas is 2x (1280x720) and the camera zooms 2x, so the
 // HD hero sprites (drawn at 0.5 scale) show 1 texel = 1 screen px while the world tiles stay chunky 2x.
-// Party: every roster hero is loaded; Tab / 1-5 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Party: every roster hero is loaded; Tab / 1-6 tag-swaps in place. F = Flashpoint (rebirth demo).
 // Enemies: Hydra Grunts / Elites (data/enemies.json) march in, hold a 250-300 px standoff and fire 3-round bursts of
 // dodgeable energy bolts; drones swoop. Robot (hero 5) shoots an arm blaster, K/X deploys 2 auto-firing drones,
 // and his Logic Engine passive (+15% ATK to the whole party) is applied in loader.js.
@@ -109,10 +109,12 @@ class GameScene extends Phaser.Scene {
     this.player.on('animationcomplete', (a) => {
       if (this.isFireAnim(a.key)) { this.st.attacking = false; if (this.hero.ranged) this.st.raisedT = this.hero.ranged.holdMs / 1000; }
       if (a.key === this.A('lower') || a.key === this.A('lower_alt')) this.st.lowering = false;
+      if (this.hero.ninja) this.ninjaAnimDone(a.key.split(':')[1]);
     });
     this.player.on('animationupdate', (a, f) => {
       if (this.hero.ranged) { if (this.isFireAnim(a.key) && f.index - 1 === this.hero.sprite.meta.animations[a.key.split(':')[1]].fireFrame) this.fireBolt(); return; }
       if (a.key === this.A('attack')) this.onAttackFrame(f.index - 1);
+      else if (this.hero.ninja) this.ninjaFrame(a.key.split(':')[1], f.index - 1);
     });
     this.bolts = this.physics.add.group({ allowGravity: false });
 
@@ -139,16 +141,17 @@ class GameScene extends Phaser.Scene {
 
     // ---- camera / input / hud ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 40).setDeadzone(60, 40);
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR,FIVE');
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,L,C,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.input.keyboard.addCapture('SPACE,UP,DOWN,LEFT,RIGHT,TAB');
-    this.buf = { jump: 0, atk: 0 };
+    this.buf = { jump: 0, atk: 0, dash: 0 };
     const kb = this.input.keyboard;
     ['SPACE', 'UP', 'W'].forEach(k => kb.on('keydown-' + k, () => this.buf.jump = 0.12));
     ['J', 'Z'].forEach(k => kb.on('keydown-' + k, () => this.buf.atk = 0.15));
     kb.on('keydown-TAB', () => this.swapTo((this.idx + 1) % this.party.length));
-    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
     kb.on('keydown-F', () => this.flashpoint());
-    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castSpecial()));   // Ivy: Thorn Eruption · Robot: drones
+    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castSpecial()));   // Ivy: Thorn Eruption · Robot: drones · ninja: shadow clone
+    ['L', 'C'].forEach(k => kb.on('keydown-' + k, () => this.buf.dash = 0.12));   // ninja dash
     this.makeHud();
     this.heroEmerge();
     if (this.rebirths) {
@@ -269,7 +272,8 @@ class GameScene extends Phaser.Scene {
     p.anims.stop(); p.setTexture(`${h.key}_idle`, 0).setOrigin(ax, ay).setScale(h.sprite.scale || 1).setAngle(0);
     p.body.setAllowGravity(!h.flight);                     // flyers hover; ground heroes fall when tagged in mid-air
     if (h.flight) p.setVelocityY(Math.min(0, p.body.velocity.y));
-    Object.assign(this.st, { attacking: false, lowering: false, raisedT: 0, fireCd: 0, hand: 1 });   // hand 1 so the first shot uses hand 0
+    Object.assign(this.st, { attacking: false, lowering: false, raisedT: 0, fireCd: 0, hand: 1 });
+    this.ninjaReset(); p.body.setMaxVelocity(520, 900);   // hand 1 so the first shot uses hand 0
     p.body.setSize(B.width, B.height).setOffset(m.frameWidth * ax - B.width / 2, m.anchor.footRow + 1 - B.height);
     p.anims.play(this.A('idle'), true);
   }
@@ -334,7 +338,7 @@ class GameScene extends Phaser.Scene {
       color: i === this.idx ? '#ffe14a' : '#8a80a8', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.msg = this.msg && this.msg.text ? this.add.text(VW / 2, 120, this.msg.text, this.msgStyle()) : this.add.text(VW / 2, 120, '', this.msgStyle());
     this.msg.setOrigin(0.5);
-    this.vineT = (h.floorVine || h.drones) ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // K special cooldown
+    this.vineT = (h.floorVine || h.drones || h.ninja?.shadowClone) ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // K special cooldown
     const buffs = (h.partyBuffs || []).map(b => this.add.text(6 + this.party.length * 70, 60, `${b.name.toUpperCase()} +${Math.round(b.atkPct * 100)}% ATK`,
       { fontFamily: 'monospace', fontSize: '8px', color: '#ffb46a', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.hud.add([g, por, name, this.subT, this.hpG, this.hpT, ...strip, ...buffs, this.msg, ...(this.vineT ? [this.vineT] : [])]);
@@ -354,6 +358,7 @@ class GameScene extends Phaser.Scene {
     this.subT.setText(`${h.faction} · ATK ${h.stats.atk}${h.stats.atk > h.stats.baseAtk ? '+' : ''} · CRIT ${Math.round(this.critChance() * 100)}%`);
     if (this.vineT && h.drones) { const cd = st.droneCd || 0, up = this.drones.length;
       this.vineT.setText(up ? `DRONES ${Math.max(0, this.drones[0].t).toFixed(1)}s` : cd > 0 ? `K DRONES ${cd.toFixed(1)}s` : 'K DRONES READY').setColor(up ? '#ffb46a' : cd > 0 ? '#7a6a5a' : '#9dff7a'); }
+    else if (this.vineT && h.ninja) { const cd = st.cloneCd || 0; this.vineT.setText(cd > 0 ? `K CLONE ${cd.toFixed(1)}s` : 'K CLONE READY').setColor(cd > 0 ? '#6a5a7a' : '#c9a0ff'); }
     else if (this.vineT) { const cd = st.vineCd; this.vineT.setText(cd > 0 ? `K VINE ${cd.toFixed(1)}s` : 'K VINE READY').setColor(cd > 0 ? '#5f7f5a' : '#7dff6a'); }
   }
 
@@ -389,13 +394,13 @@ class GameScene extends Phaser.Scene {
     this.sparks(e.x, cy - 8, this.hero.ui?.spark ?? (crit ? 0x7ff0ff : 0xffffff), crit ? 10 : 6);
     if (!o.quiet) {   // drone lasers don't shake / freeze the screen
       this.cameras.main.shake(o.ranged ? 40 : 60, crit ? 0.005 : o.ranged ? 0.0015 : 0.003);
-      this.hitstop(crit ? (o.ranged ? 40 : 70) : this.hero.attack?.hitstopMs ?? 45);
+      this.hitstop(o.hitstopMs ? o.hitstopMs + (crit ? 20 : 0) : crit ? (o.ranged ? 40 : 70) : this.hero.attack?.hitstopMs ?? 45);
     }
     if (e.hp <= 0) this.killEnemy(e);
   }
   cy(e) { return e.body ? e.body.center.y : e.y; }   // enemy body centre (Hydra sprites are anchored at the feet)
   top(e) { return e.kind === 'hydra' ? e.y - this.E.sprite.body.height * e.scaleY : e.y - e.displayHeight / 2; }
-  castSpecial() { if (this.hero.floorVine) this.castVine(); else if (this.hero.drones) this.deployDrones(); }
+  castSpecial() { if (this.hero.floorVine) this.castVine(); else if (this.hero.drones) this.deployDrones(); else if (this.hero.ninja?.shadowClone) this.shadowClone(); }
   // ---- Poison Ivy: Thorn Eruption (K / X) — a thorny vine bursts from the floor under the nearest enemy in range ----
   groundAt(x) {   // nearest x with floor under it (the stage has two pits)
     const gaps = [[1100, 1180], [2080, 2170]];
@@ -571,7 +576,8 @@ class GameScene extends Phaser.Scene {
     this.hurtPlayer(e.atk, e.x);
   }
   hurtPlayer(dmg, srcX, kb = 1) {
-    const st = this.st; if (st.invuln > 0 || st.dead || st.special || st.won) return false;
+    const st = this.st; if (st.invuln > 0 || st.dead || st.special || st.won || st.iframeT > 0) return false;
+    if (st.nj) this.ninjaReset();
     st.hp -= dmg; st.invuln = 1.0; st.hurtT = 0.32; st.attacking = false; this.player.setFlipX(st.facing < 0);
     const d = this.player.x < srcX ? -1 : 1;
     this.player.setVelocity(d * 200 * kb, this.hero.flight ? -60 * kb : -220 * kb);
@@ -768,6 +774,7 @@ class GameScene extends Phaser.Scene {
     if (!st.won && Math.abs(p.x - this.goal.x) < 20 && (onGround || (h.flight && Math.abs(p.y - GROUND_Y) < 90))) { st.won = true; this.msg.setText('RIFT SEALED\nstage clear — press R'); this.sealGate(); }
     if (h.flight) { this.updateFlight(dt, time, left, right, atkPressed); return; }
     if (st.hurtT > 0) { this.applyFriction(onGround, dt); return; }
+    if (h.ninja) { this.updateNinja(dt, time, onGround, left, right, jumpPressed, atkPressed, running); return; }
 
     const mirrorAtk = !!h.sprite.attackArtFacesLeft;   // Asagi's attack take slashes toward image-left
     if (atkPressed && !st.attacking) {
@@ -842,6 +849,217 @@ class GameScene extends Phaser.Scene {
     if (st.lowering && !flying) return;
     st.lowering = false;
     if (flying) this.playLoop('fly', 1); else this.playLoop('idle', 1);
+  }
+  // ================= ninja movement kit (roster 'ninja' block; Sakura first, Asagi / Ingrid can opt in later) =================
+  ninjaReset() {
+    const st = this.st; if (!st) return;
+    st.nj = { mode: null, chain: 0, queued: false, airJumps: 0, airDashes: 0, slashes: 0, dashT: 0, dashCd: 0, dashDir: 1, ghostT: 0, afterDash: 0, line: null };
+    st.iframeT = 0; st.attacking = false;
+    if (this.player && this.player.body) { this.player.body.setAllowGravity(!this.hero.flight); this.player.anims.timeScale = 1; }
+  }
+  ninjaGhost(alpha = 0.55, ms = 220) {
+    const cols = this.hero.fx?.ninjaGhost || [0x7ff0ff, 0xff9a3a]; this.st.nj.gi = (this.st.nj.gi || 0) + 1;
+    this.ghost(cols[this.st.nj.gi % cols.length], alpha, ms);
+  }
+  ninjaPlay(name, mode) {
+    const p = this.player, st = this.st, N = st.nj;
+    N.mode = mode; st.attacking = mode !== 'flip'; st.hitSet = new Set();
+    p.anims.timeScale = 1; p.anims.play(this.A(name), true); p.setFlipX(st.facing < 0);
+  }
+  ninjaEnd() {
+    const st = this.st, N = st.nj; N.mode = null; N.queued = false; st.attacking = false;
+    this.player.body.setAllowGravity(true); this.player.body.setMaxVelocity(520, 900);
+  }
+  startCombo(i) {
+    const C = this.hero.ninja.combo, H = C.hits[i], st = this.st, N = st.nj, p = this.player;
+    N.chain = i; N.queued = false; this.ninjaPlay(H.anim, 'combo');
+    p.setVelocityX(st.facing * H.step * 2.2);   // step into the swing
+    this.comboCount = (this.comboCount || 0) + 1;
+  }
+  ninjaHitRect(reach, height, yOff = 0) {
+    const p = this.player, f = this.st.facing;
+    return new Phaser.Geom.Rectangle(f > 0 ? p.x - 10 : p.x - reach, p.y - height + yOff, reach + 10, height + 4);
+  }
+  ninjaStrike(rect, H, o = {}) {
+    const st = this.st; let n = 0;
+    this.enemies.getChildren().forEach(e => {
+      if (!e.active || e.dying || !e.body || st.hitSet.has(e)) return;
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(rect, e.getBounds())) return;
+      st.hitSet.add(e); n++;
+      this.damageEnemy(e, { mult: H.mult, knockback: H.knockback, stun: H.stun, hitstopMs: H.hitstopMs, dir: st.facing, ...o });
+      if (e.active && e.body && H.launch && e.kind === 'hydra') e.setVelocityY(-H.launch);
+    });
+    return n;
+  }
+  slashArc(x, y, dir, w, h, col = 0xbff4ff, ms = 140) {   // programmatic slash crescent so hits read at game scale
+    const g = this.add.graphics().setDepth(6); g.lineStyle(3, col, 0.95);
+    g.beginPath(); g.arc(0, 0, w, -Math.PI / 2.4, Math.PI / 2.4, false); g.strokePath();
+    g.lineStyle(1, 0xffffff, 1); g.beginPath(); g.arc(0, 0, w - 3, -Math.PI / 2.8, Math.PI / 2.8, false); g.strokePath();
+    g.setPosition(x, y).setScale(dir, h / w);
+    this.tweens.add({ targets: g, alpha: 0, scaleX: dir * 1.15, duration: ms, onComplete: () => g.destroy() });
+  }
+  ninjaFrame(name, i) {
+    const h = this.hero, NJ = h.ninja, st = this.st, N = st.nj, p = this.player, an = h.sprite.meta.animations[name];
+    if (!an || !an.activeFrames || !N) return;
+    const act = an.activeFrames;
+    if (N.mode === 'combo' && name === NJ.combo.hits[N.chain].anim) {
+      const H = NJ.combo.hits[N.chain];
+      if (act.includes(i)) {
+        if (i === act[0]) this.slashArc(p.x + st.facing * 46, p.y - 82, st.facing, 54, 70 + N.chain * 10, N.chain === 3 ? 0x7fd8ff : 0xdff8ff);
+        if (an.hitPerActiveFrame) st.hitSet = new Set();
+        this.ninjaStrike(this.ninjaHitRect(H.reach, H.height), H);
+      }
+      // cancel window: after the last active frame a buffered J chains straight into the next hit
+      if (i > act[act.length - 1] && N.queued && N.chain < NJ.combo.hits.length - 1) this.startCombo(N.chain + 1);
+    } else if (N.mode === 'air' && name === NJ.airSlash.anim && act.includes(i)) {
+      if (i === act[0]) this.slashArc(p.x + st.facing * 40, p.y - 80, st.facing, 66, 96, 0xbff4ff, 180);
+      this.ninjaStrike(this.ninjaHitRect(NJ.airSlash.reach, NJ.airSlash.height, 30), NJ.airSlash);
+    } else if (N.mode === 'dashatk' && name === NJ.dashAttack.anim && i === act[0] && !N.line) this.dashCutGo();
+  }
+  ninjaAnimDone(name) {
+    const NJ = this.hero.ninja, N = this.st.nj; if (!N) return;
+    if (N.mode === 'combo' && name === NJ.combo.hits[N.chain].anim) {
+      if (N.queued && N.chain < NJ.combo.hits.length - 1) this.startCombo(N.chain + 1);
+      else { const c = N.chain; this.ninjaEnd(); N.chainWindow = c < NJ.combo.hits.length - 1 ? NJ.combo.bufferMs / 1000 : 0; N.nextHit = c + 1; }
+    } else if (N.mode === 'air' && name === NJ.airSlash.anim) this.ninjaEnd();
+    else if (N.mode === 'dashatk' && name === NJ.dashAttack.anim) this.ninjaEnd();
+    else if (N.mode === 'flip' && name === NJ.doubleJump.anim) N.mode = null;
+  }
+  startDash(dir) {
+    const D = this.hero.ninja.dash, st = this.st, N = st.nj, p = this.player;
+    st.facing = dir; N.dashDir = dir; N.dashT = D.ms / 1000; N.dashCd = D.cooldownMs / 1000; st.iframeT = D.iframeMs / 1000;
+    this.ninjaPlay(D.anim, 'dash'); st.attacking = true;
+    p.body.setAllowGravity(false); p.body.setMaxVelocity(D.speed + 20, 900); p.setVelocity(dir * D.speed, 0);
+    this.dashes = (this.dashes || 0) + 1;
+    this.sparks(p.x - dir * 10, p.y - 6, 0x9fe8ff, 6);
+  }
+  startDashCut() {   // J during (or right after) a dash: one iaido cut that pierces every enemy on a line
+    const st = this.st, N = st.nj, p = this.player, DA = this.hero.ninja.dashAttack;
+    N.dashT = 0; N.afterDash = 0; N.line = null;
+    this.ninjaPlay(DA.anim, 'dashatk'); p.body.setAllowGravity(false); p.setVelocity(0, 0);
+    st.iframeT = Math.max(st.iframeT, 0.45);
+  }
+  dashCutGo() {
+    const st = this.st, N = st.nj, p = this.player, DA = this.hero.ninja.dashAttack, dir = st.facing;
+    N.line = { x0: p.x, dir, t: 0, hit: [] }; st.hitSet = new Set();
+    p.body.setMaxVelocity(DA.lengthPx / (DA.travelMs / 1000) + 40, 900); p.setVelocity(dir * DA.lengthPx / (DA.travelMs / 1000), 0);
+    this.dashCuts = (this.dashCuts || 0) + 1;
+  }
+  dashCutUpdate(dt) {
+    const st = this.st, N = st.nj, L = N.line, p = this.player, DA = this.hero.ninja.dashAttack; if (!L || L.done) return;
+    L.t += dt; this.ninjaGhost(0.5, 200);
+    const xa = Math.min(L.x0, p.x), xb = Math.max(L.x0, p.x), rect = new Phaser.Geom.Rectangle(xa - 20, p.y - DA.height, xb - xa + 40, DA.height + 4);
+    this.enemies.getChildren().forEach(e => { if (e.active && !e.dying && e.body && !st.hitSet.has(e) && Phaser.Geom.Intersects.RectangleToRectangle(rect, e.getBounds())) { st.hitSet.add(e); L.hit.push(e); if (e.kind === 'hydra') e.stun = Math.max(e.stun, 0.5); } });
+    if (Math.abs(p.x - L.x0) >= DA.lengthPx || L.t >= DA.travelMs / 1000 + 0.05 || p.body.blocked.left || p.body.blocked.right) {
+      L.done = true; p.setVelocityX(L.dir * 60); p.body.setMaxVelocity(520, 900);
+      // the line flashes, then every enemy she passed through is cut at once (staggered by a few ms)
+      const y = p.y - 70, g = this.add.graphics().setDepth(6);
+      g.fillStyle(0xffffff, 1).fillRect(xa - 20, y - 1, xb - xa + 40, 2); g.fillStyle(0x7fd8ff, 0.6).fillRect(xa - 20, y - 3, xb - xa + 40, 6);
+      this.tweens.add({ targets: g, alpha: 0, duration: 260, delay: 60, onComplete: () => g.destroy() });
+      L.hit.forEach((e, k) => this.time.delayedCall(70 + k * 45, () => {
+        if (!e.active || e.dying) return;
+        if (!this.hero.ninja) return;   // tagged out mid-cut
+        this.damageEnemy(e, { mult: DA.mult, knockback: DA.knockback, stun: DA.stun, hitstopMs: k === 0 ? DA.hitstopMs : 12, dir: L.dir });
+        this.slashArc(e.x, this.cy(e), L.dir, 26, 46, 0xffffff, 120);
+      }));
+      this.dashCutHits = (this.dashCutHits || 0) + L.hit.length;
+    }
+  }
+  shadowClone() {
+    const h = this.hero, S = h.ninja.shadowClone, st = this.st, p = this.player;
+    if (st.dead || st.won || st.special || (st.cloneCd || 0) > 0 || st.hurtT > 0) return;
+    this.ninjaEnd(); st.cloneCd = S.cooldownMs / 1000; this.cloneCasts = (this.cloneCasts || 0) + 1;
+    const T = this.enemies.getChildren().filter(e => e.active && !e.dying && e.body && Math.abs(e.x - p.x) < S.rangePx && Math.abs(e.y - p.y) < 220)
+      .sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x)).slice(0, S.maxTargets);
+    // she vanishes in a puff, shadow clones appear beside each target and cut, then she blinks in behind the last one
+    this.sparks(p.x, p.y - 70, 0x6a3aff, 14); this.sparks(p.x, p.y - 70, 0x111122, 10);
+    st.iframeT = S.hiddenMs / 1000 + 0.35; st.attacking = true; st.nj.mode = 'clone';
+    p.setAlpha(0); p.body.setAllowGravity(false); p.setVelocity(0, 0);
+    const spots = T.length ? T.map((e, k) => ({ e, x: e.x - (k % 2 ? -1 : 1) * Math.sign(e.x - p.x || st.facing) * 46 }))
+      : [{ e: null, x: p.x + st.facing * S.fallbackPx * 0.5 }];
+    spots.forEach((s, k) => this.time.delayedCall(k * 90, () => {
+      const dir = s.e ? Math.sign(s.e.x - s.x) || 1 : st.facing, y = s.e && s.e.kind === 'hydra' ? s.e.y : Math.min(GROUND_Y, p.y);
+      const c = this.add.sprite(s.x, y, `${h.key}_combo3`, 0).setOrigin(p.originX, p.originY).setScale(p.scaleX).setFlipX(dir < 0)
+        .setTint(S.tint).setAlpha(0.85).setDepth(5.5);
+      c.play(this.A('combo3')); c.anims.timeScale = 1.7;
+      this.sparks(s.x, y - 70, 0x6a3aff, 8);
+      this.time.delayedCall(150, () => {
+        this.slashArc(s.x + dir * 40, y - 80, dir, 52, 80, 0xc9a0ff, 160);
+        if (s.e && s.e.active && !s.e.dying) this.damageEnemy(s.e, { mult: S.mult, stun: S.stun, knockback: 60, dir, hitstopMs: 30 });
+      });
+      c.once('animationcomplete', () => this.tweens.add({ targets: c, alpha: 0, duration: 160, onComplete: () => c.destroy() }));
+    }));
+    this.time.delayedCall(S.hiddenMs + (spots.length - 1) * 90, () => {
+      if (!this.hero.ninja || st.dead) { p.setAlpha(1); return; }
+      const last = spots[spots.length - 1], e = last.e;
+      const nx = e ? Phaser.Math.Clamp(e.x + Math.sign(e.x - p.x || st.facing) * 60, 24, WORLD_W - 24) : p.x + st.facing * S.fallbackPx;
+      p.setPosition(this.groundAt(nx), p.y); if (e) st.facing = Math.sign(e.x - p.x) || st.facing;
+      p.setAlpha(1); p.body.setAllowGravity(true); p.setFlipX(st.facing < 0);
+      this.ninjaGhost(0.7, 260); this.sparks(p.x, p.y - 70, 0x6a3aff, 12);
+      this.ninjaEnd(); p.anims.play(this.A('idle'), true);
+    });
+  }
+  updateNinja(dt, time, onGround, left, right, jumpPressed, atkPressed, running) {
+    const p = this.player, st = this.st, h = this.hero, NJ = h.ninja, N = st.nj, K = this.keys;
+    N.dashCd = Math.max(0, N.dashCd - dt); st.iframeT = Math.max(0, (st.iframeT || 0) - dt); st.cloneCd = Math.max(0, (st.cloneCd || 0) - dt);
+    N.afterDash = Math.max(0, N.afterDash - dt); N.chainWindow = Math.max(0, (N.chainWindow || 0) - dt); this.buf.dash = Math.max(0, this.buf.dash - dt);
+    if (onGround) { N.airJumps = NJ.doubleJump.airJumps; N.airDashes = NJ.dash.airDashes; N.slashes = 0; }
+    if (N.mode === 'clone') return;
+    let dir = (right ? 1 : 0) - (left ? 1 : 0);
+    // ---- dash (L / C): burst of speed with i-frames + afterimages; J during it = dash cut ----
+    if (this.buf.dash > 0 && N.dashCd <= 0 && N.mode !== 'dash' && N.mode !== 'dashatk' && (onGround || N.airDashes > 0)) {
+      this.buf.dash = 0; if (!onGround) N.airDashes--; this.startDash(dir || st.facing); return;
+    }
+    if (N.mode === 'dash') {
+      N.dashT -= dt; N.ghostT -= dt;
+      if (N.ghostT <= 0) { N.ghostT = NJ.dash.ghostMs / 1000; this.ninjaGhost(0.55, 200); }
+      p.setVelocity(N.dashDir * NJ.dash.speed, 0);
+      if (atkPressed) { this.buf.atk = 0; this.startDashCut(); return; }
+      if (N.dashT <= 0) { this.ninjaEnd(); N.afterDash = NJ.dashAttack.inputWindowMs / 1000; p.setVelocityX(N.dashDir * h.move.runSpeed); }
+      else return;
+    }
+    if (N.mode === 'dashatk') { this.dashCutUpdate(dt); if (N.line && N.line.done) this.applyFriction(true, dt); return; }
+    // ---- attacks ----
+    if (atkPressed) {
+      if (N.afterDash > 0 && !N.mode) { this.buf.atk = 0; this.startDashCut(); return; }
+      if (N.mode === 'combo') { N.queued = true; this.buf.atk = 0; }
+      else if (!onGround && (!N.mode || N.mode === 'flip') && N.slashes < NJ.airSlash.perJump) {
+        this.buf.atk = 0; N.slashes++; this.ninjaPlay(NJ.airSlash.anim, 'air'); this.airSlashes = (this.airSlashes || 0) + 1;
+        if (p.body.velocity.y > -NJ.airSlash.hop) p.setVelocityY(-NJ.airSlash.hop);   // small hang-time hop
+      } else if (onGround && !N.mode) { this.buf.atk = 0; this.startCombo(N.chainWindow > 0 ? N.nextHit : 0); N.chainWindow = 0; }
+    }
+    if (N.mode === 'combo') {   // grounded combo: no walking, the step-in decays
+      if (dir) st.facing = st.facing;   // facing locked mid-chain
+      p.setVelocityX(p.body.velocity.x * Math.max(0, 1 - dt * 9)); p.setFlipX(st.facing < 0);
+      if (!onGround) this.ninjaEnd(); else return;
+    }
+    if (N.mode === 'air' && onGround) { this.ninjaEnd(); }
+    // ---- movement ----
+    const speed = running ? h.move.runSpeed : h.move.walkSpeed;
+    if (dir) {
+      if (N.mode !== 'air') st.facing = dir;
+      const target = dir * speed, ctl = onGround ? 1 : h.move.airControl;
+      p.setVelocityX(Phaser.Math.Linear(p.body.velocity.x, target, Math.min(1, dt * (h.move.accel || 14) * ctl)));
+    } else this.applyFriction(onGround, dt);
+    p.setFlipX(st.facing < 0);
+    // ---- jump / double jump (front flip) ----
+    if (jumpPressed && st.coyote > 0 && st.jumpT <= 0) { st.jumpT = 0.05; st.coyote = 0; this.buf.jump = 0; }
+    else if (jumpPressed && !onGround && st.coyote <= 0 && st.jumpT <= 0 && N.airJumps > 0 && N.mode !== 'air') {
+      this.buf.jump = 0; N.airJumps--; p.setVelocityY(-NJ.doubleJump.velocity); this.ninjaPlay(NJ.doubleJump.anim, 'flip');
+      this.ninjaGhost(0.5, 220); this.sparks(p.x, p.y - 10, 0x9fe8ff, 8); this.doubleJumps = (this.doubleJumps || 0) + 1;
+    }
+    if (st.jumpT > 0) { st.jumpT -= dt; if (st.jumpT <= 0) p.setVelocityY(-h.move.jumpVelocity); }
+    if (!onGround && p.body.velocity.y < -180 && st.jumpT <= 0 && N.mode !== 'flip' && N.mode !== 'air' && !(K.SPACE.isDown || K.UP.isDown || K.W.isDown)) p.setVelocityY(-180);
+    if (onGround && !st.wasGround) { st.landT = 0.06; if (N.mode === 'flip') N.mode = null; }
+    st.wasGround = onGround; st.landT = Math.max(0, st.landT - dt);
+    if (N.mode === 'air' || N.mode === 'flip') return;
+    const jt = `${h.key}_jump`;
+    if (st.jumpT > 0 || st.landT > 0) { p.anims.stop(); p.setTexture(jt, 1); return; }
+    if (!onGround) { p.anims.stop(); p.setTexture(jt, p.body.velocity.y < 60 ? 0 : 1); return; }
+    const vx = Math.abs(p.body.velocity.x);
+    if (vx > (h.move.walkSpeed + h.move.runSpeed) / 2 - 5) this.playLoop('run', vx / h.move.runSpeed);
+    else if (vx > 12) this.playLoop('walk', vx / h.move.walkSpeed);
+    else this.playLoop('idle', 1);
   }
   playLoop(name, rate) {
     const p = this.player, key = this.A(name);

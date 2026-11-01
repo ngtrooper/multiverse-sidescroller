@@ -1,10 +1,11 @@
 {
-  "comment": "Playable heroes (party order = Tab/1-5). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP). drones = Robot's K/X support drones; partyBuff = a party-wide passive applied in loader.js (Robot's Logic Engine).",
+  "comment": "Playable heroes (party order = Tab/1-6). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP). drones = Robot's K/X support drones; partyBuff = a party-wide passive applied in loader.js (Robot's Logic Engine). ninja = the reusable ninja movement kit (double jump, dash L/C with i-frames, J combo chain, air slash, dash attack, K shadow-clone blink); any hero with a 'ninja' block and the matching sprite anims gets it.",
   "default": "Asagi Igawa",
   "heroes": [
     {
       "name": "Asagi Igawa",
       "key": "asagi",
+      "card": "../cards/asagi_igawa.json",
       "portrait": "assets/portraits/asagi_face.png",
       "sprite": {
         "meta": "assets/sprites/asagi_hd/asagi_hd_anim.json",
@@ -37,6 +38,7 @@
     {
       "name": "The Flash (Barry Allen)",
       "key": "flash",
+      "card": "../cards/the_flash.json",
       "portrait": "assets/portraits/flash_face.png",
       "sprite": {
         "meta": "assets/sprites/flash_hd/flash_hd_anim.json",
@@ -77,6 +79,7 @@
     {
       "name": "Iron Man MK VII",
       "key": "ironman",
+      "card": "../cards/iron_man_mk_vii.json",
       "portrait": "assets/portraits/ironman_face.png",
       "sprite": {
         "meta": "assets/sprites/ironman_hd/ironman_hd_anim.json",
@@ -161,6 +164,7 @@
     {
       "name": "Poison Ivy (Shtora)",
       "key": "ivy",
+      "card": "../cards/poison_ivy.json",
       "portrait": "assets/portraits/ivy_face.png",
       "sprite": {
         "meta": "assets/sprites/ivy_hd/ivy_hd_anim.json",
@@ -268,11 +272,149 @@
       "partyBuff": {
         "name": "Logic Engine",
         "atkPct": 0.15,
-        "note": "Passive 'Logic Engine | +15% attack to all party members.' — applied at load to every hero's ATK (additive with other party buffs, like Heroes Idle). HUD shows ATK with a + and the buff line."
+        "note": "Passive 'Logic Engine | +15% attack to all party members.' \u2014 applied at load to every hero's ATK (additive with other party buffs, like Heroes Idle). HUD shows ATK with a + and the buff line."
       },
       "ui": {
         "accent": 14708778,
         "spark": 10354554
+      }
+    },
+    {
+      "name": "Sakura Igawa",
+      "key": "sakura",
+      "card": "../cards/sakura_igawa.json",
+      "portrait": "assets/portraits/sakura_face.png",
+      "sprite": {
+        "meta": "assets/sprites/sakura_hd/sakura_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 52,
+          "height": 270
+        }
+      },
+      "move": {
+        "walkSpeed": 95,
+        "runSpeed": 240,
+        "jumpVelocity": 480,
+        "airControl": 0.95,
+        "accel": 18,
+        "walkCyclePx": 110,
+        "runCyclePx": 200
+      },
+      "attack": {
+        "reach": 125,
+        "height": 150,
+        "knockback": 140,
+        "hitstopMs": 40
+      },
+      "fx": {
+        "ninjaGhost": [
+          8384767,
+          16751162
+        ]
+      },
+      "ninja": {
+        "doubleJump": {
+          "velocity": 440,
+          "airJumps": 1,
+          "anim": "flip"
+        },
+        "dash": {
+          "keys": [
+            "L",
+            "C"
+          ],
+          "speed": 560,
+          "ms": 190,
+          "cooldownMs": 380,
+          "iframeMs": 190,
+          "airDashes": 1,
+          "anim": "dash",
+          "ghostMs": 28
+        },
+        "combo": {
+          "bufferMs": 260,
+          "hits": [
+            {
+              "anim": "combo1",
+              "mult": 0.85,
+              "reach": 125,
+              "height": 150,
+              "knockback": 90,
+              "stun": 0.4,
+              "hitstopMs": 30,
+              "step": 70
+            },
+            {
+              "anim": "combo2",
+              "mult": 0.95,
+              "reach": 130,
+              "height": 165,
+              "knockback": 110,
+              "stun": 0.4,
+              "hitstopMs": 40,
+              "step": 70
+            },
+            {
+              "anim": "combo3",
+              "mult": 1.1,
+              "reach": 135,
+              "height": 150,
+              "knockback": 140,
+              "stun": 0.45,
+              "hitstopMs": 50,
+              "step": 90
+            },
+            {
+              "anim": "combo4",
+              "mult": 1.6,
+              "reach": 150,
+              "height": 170,
+              "knockback": 320,
+              "stun": 0.6,
+              "hitstopMs": 80,
+              "step": 110,
+              "launch": 240
+            }
+          ]
+        },
+        "airSlash": {
+          "anim": "airslash",
+          "mult": 1.2,
+          "reach": 145,
+          "height": 190,
+          "knockback": 180,
+          "stun": 0.45,
+          "hitstopMs": 45,
+          "hop": 170,
+          "perJump": 1
+        },
+        "dashAttack": {
+          "anim": "dashatk",
+          "mult": 1.5,
+          "lengthPx": 260,
+          "travelMs": 170,
+          "height": 150,
+          "knockback": 260,
+          "stun": 0.7,
+          "hitstopMs": 70,
+          "inputWindowMs": 140
+        },
+        "shadowClone": {
+          "cooldownMs": 6000,
+          "rangePx": 340,
+          "maxTargets": 3,
+          "mult": 0.9,
+          "stun": 0.8,
+          "hiddenMs": 420,
+          "tint": 3807834,
+          "fallbackPx": 200
+        },
+        "wallJump": false
+      },
+      "ui": {
+        "accent": 16747054,
+        "spark": 10479871
       }
     }
   ]
