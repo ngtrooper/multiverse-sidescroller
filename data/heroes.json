@@ -120,6 +120,26 @@
    "Pack": "Regular Booster Pack",
    "BaseDmgPct": 1,
    "ShopPrice": 500000
+  },
+  {
+   "Name": "Ingrid",
+   "Rarity": "Unique",
+   "Alignment": "Hero",
+   "Faction": "Taimanin",
+   "Universe": "Action Taimanin",
+   "Race": "Human",
+   "Attack": 600,
+   "Health": 980,
+   "CritChance": 0.15,
+   "CritDmg": 1,
+   "Flavor Text": "Every wound they carry makes them weaker. I make sure they carry many.",
+   "art": "ingrid.jpg",
+   "Passive": "Iron Crusade | On every hit applies Marked to the enemy. Each Marked stack increases all damage taken by 3% (max 5 stacks / 15% total). Party-wide benefit.",
+   "Leader": "",
+   "Description": "A crusader-type Taimanin known for relentless offensive pressure and the ability to exploit every weakness she exposes in her enemies. Ingrid fights with methodical precision, systematically marking targets so that every subsequent strike from her allies lands harder. Her Iron Crusade technique leaves enemies progressively more vulnerable with each blow, turning drawn-out battles into guaranteed victories. She operates with a cold efficiency that masks a deep-seated drive to eliminate every demonic threat she encounters.",
+   "Pack": "Regular Booster Pack",
+   "BaseDmgPct": 1,
+   "ShopPrice": 2000000
   }
  ]
 }

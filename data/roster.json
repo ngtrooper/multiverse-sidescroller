@@ -1,5 +1,5 @@
 {
-  "comment": "Playable heroes (party order = Tab/1-6). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP). drones = Robot's K/X support drones; partyBuff = a party-wide passive applied in loader.js (Robot's Logic Engine). ninja = the reusable ninja movement kit (double jump, dash L/C with i-frames, J combo chain, air slash, dash attack, K shadow-clone blink); any hero with a 'ninja' block and the matching sprite anims gets it.",
+  "comment": "Playable heroes (party order = Tab/1-7). Stats come from heroes.json; sprite + body + move data lives here. sprite.scale: HD sheets are drawn at 0.5 in a 2x-zoomed world (1 texel = 1 screen px). attackArtFacesLeft mirrors an attack take whose strike travels toward image-left. flight = no-gravity 8-way movement; ranged = projectile attack (muzzle/muzzleAlt/jet offsets are world px from the feet anchor, facing right; muzzleAlt = the other hand, used by the *_alt attack sheets). poison = Toxic DoT (stacking % of enemy max HP). drones = Robot's K/X support drones; partyBuff = a party-wide passive applied in loader.js (Robot's Logic Engine). ninja = the reusable ninja movement kit (double jump, dash L/C with i-frames, J combo chain, air slash, dash attack, K shadow-clone blink); any hero with a 'ninja' block and the matching sprite anims gets it.",
   "default": "Asagi Igawa",
   "heroes": [
     {
@@ -272,7 +272,7 @@
       "partyBuff": {
         "name": "Logic Engine",
         "atkPct": 0.15,
-        "note": "Passive 'Logic Engine | +15% attack to all party members.' \u2014 applied at load to every hero's ATK (additive with other party buffs, like Heroes Idle). HUD shows ATK with a + and the buff line."
+        "note": "Passive 'Logic Engine | +15% attack to all party members.' — applied at load to every hero's ATK (additive with other party buffs, like Heroes Idle). HUD shows ATK with a + and the buff line."
       },
       "ui": {
         "accent": 14708778,
@@ -415,6 +415,134 @@
       "ui": {
         "accent": 16747054,
         "spark": 10479871
+      }
+    },
+    {
+      "name": "Ingrid",
+      "key": "ingrid",
+      "card": "../cards/ingrid.json",
+      "portrait": "assets/portraits/ingrid_face.png",
+      "sprite": {
+        "meta": "assets/sprites/ingrid_hd/ingrid_hd_anim.json",
+        "scale": 0.5,
+        "body": {
+          "width": 56,
+          "height": 280
+        }
+      },
+      "move": {
+        "walkSpeed": 85,
+        "runSpeed": 215,
+        "jumpVelocity": 440,
+        "airControl": 0.8,
+        "accel": 14,
+        "walkCyclePx": 110,
+        "runCyclePx": 210
+      },
+      "attack": {
+        "reach": 160,
+        "height": 170,
+        "knockback": 180,
+        "hitstopMs": 60
+      },
+      "fx": {
+        "ninjaGhost": [
+          10111743,
+          16761402
+        ]
+      },
+      "mark": {
+        "name": "Marked",
+        "perStack": 0.03,
+        "max": 5,
+        "perHit": 1,
+        "color": 11553535
+      },
+      "ninja": {
+        "noAirMoves": true,
+        "doubleJump": {
+          "velocity": 0,
+          "airJumps": 0,
+          "anim": null
+        },
+        "dash": {
+          "keys": [
+            "L",
+            "C"
+          ],
+          "mode": "strike",
+          "cooldownMs": 900,
+          "airDashes": 0,
+          "anim": "dashatk",
+          "ghostMs": 40,
+          "superArmor": true
+        },
+        "combo": {
+          "bufferMs": 320,
+          "hits": [
+            {
+              "anim": "combo1",
+              "mult": 1.0,
+              "reach": 160,
+              "height": 170,
+              "knockback": 120,
+              "stun": 0.5,
+              "hitstopMs": 55,
+              "step": 50
+            },
+            {
+              "anim": "combo2",
+              "mult": 1.15,
+              "reach": 170,
+              "height": 200,
+              "knockback": 150,
+              "stun": 0.55,
+              "hitstopMs": 65,
+              "step": 55
+            },
+            {
+              "anim": "combo3",
+              "mult": 1.9,
+              "reach": 190,
+              "height": 210,
+              "knockback": 360,
+              "stun": 0.8,
+              "hitstopMs": 110,
+              "step": 70,
+              "launch": 220,
+              "marks": 2
+            }
+          ]
+        },
+        "airSlash": null,
+        "dashAttack": {
+          "anim": "dashatk",
+          "mult": 1.6,
+          "lengthPx": 160,
+          "travelMs": 200,
+          "height": 170,
+          "knockback": 280,
+          "stun": 0.8,
+          "hitstopMs": 80,
+          "inputWindowMs": 0
+        },
+        "eclipseSlam": {
+          "anim": "special",
+          "cooldownMs": 7000,
+          "radiusPx": 190,
+          "mult": 2.2,
+          "marks": 2,
+          "stun": 1.1,
+          "knockback": 220,
+          "launch": 200,
+          "hitstopMs": 110,
+          "superArmor": true
+        },
+        "wallJump": false
+      },
+      "ui": {
+        "accent": 9055202,
+        "spark": 13073919
       }
     }
   ]

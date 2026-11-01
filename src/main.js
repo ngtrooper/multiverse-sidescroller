@@ -1,11 +1,12 @@
 // Rift Runners — test stage. Phaser 3 (vendored), arcade physics.
 // World is laid out in 640x360 "world px"; the canvas is 2x (1280x720) and the camera zooms 2x, so the
 // HD hero sprites (drawn at 0.5 scale) show 1 texel = 1 screen px while the world tiles stay chunky 2x.
-// Party: every roster hero is loaded; Tab / 1-6 tag-swaps in place. F = Flashpoint (rebirth demo).
+// Party: every roster hero is loaded; Tab / 1-7 tag-swaps in place. F = Flashpoint (rebirth demo).
 // Enemies: Hydra Grunts / Elites (data/enemies.json) march in, hold a 250-300 px standoff and fire 3-round bursts of
 // dodgeable energy bolts; drones swoop. Robot (hero 5) shoots an arm blaster, K/X deploys 2 auto-firing drones,
 // and his Logic Engine passive (+15% ATK to the whole party) is applied in loader.js.
 // Flying heroes (roster.flight, e.g. Iron Man) ignore gravity and move 8-way; ranged heroes fire projectiles with Burn DoT.
+// roster.mark (Ingrid's Iron Crusade): every hit adds a Marked stack (max 5); each stack = +3% damage taken from the whole party.
 // roster.poison (Poison Ivy's Toxic): 50% per hit to add an uncapped Poison stack, each ticking 2% of the enemy's max HP per second.
 const VW = 640, VH = 360, GROUND_Y = 316, WORLD_W = 3600, ZOOM = 2;
 // scrollFactor-0 objects are zoomed around the screen centre; this offset pins them to the top-left
@@ -141,17 +142,17 @@ class GameScene extends Phaser.Scene {
 
     // ---- camera / input / hud ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12, 0, 40).setDeadzone(60, 40);
-    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,L,C,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR,FIVE,SIX');
+    this.keys = this.input.keyboard.addKeys('LEFT,RIGHT,UP,DOWN,A,D,W,S,SPACE,J,Z,K,X,L,C,SHIFT,R,F,TAB,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN');
     this.input.keyboard.addCapture('SPACE,UP,DOWN,LEFT,RIGHT,TAB');
     this.buf = { jump: 0, atk: 0, dash: 0 };
     const kb = this.input.keyboard;
     ['SPACE', 'UP', 'W'].forEach(k => kb.on('keydown-' + k, () => this.buf.jump = 0.12));
     ['J', 'Z'].forEach(k => kb.on('keydown-' + k, () => this.buf.atk = 0.15));
     kb.on('keydown-TAB', () => this.swapTo((this.idx + 1) % this.party.length));
-    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN'].forEach((k, i) => kb.on('keydown-' + k, () => this.swapTo(i)));
     kb.on('keydown-F', () => this.flashpoint());
-    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castSpecial()));   // Ivy: Thorn Eruption · Robot: drones · ninja: shadow clone
-    ['L', 'C'].forEach(k => kb.on('keydown-' + k, () => this.buf.dash = 0.12));   // ninja dash
+    ['K', 'X'].forEach(k => kb.on('keydown-' + k, () => this.castSpecial()));   // Ivy: Thorn Eruption · Robot: drones · Sakura: shadow clone · Ingrid: eclipse slam
+    ['L', 'C'].forEach(k => kb.on('keydown-' + k, () => this.buf.dash = 0.12));   // ninja dash (Ingrid: super-armor charge strike)
     this.makeHud();
     this.heroEmerge();
     if (this.rebirths) {
@@ -338,7 +339,7 @@ class GameScene extends Phaser.Scene {
       color: i === this.idx ? '#ffe14a' : '#8a80a8', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.msg = this.msg && this.msg.text ? this.add.text(VW / 2, 120, this.msg.text, this.msgStyle()) : this.add.text(VW / 2, 120, '', this.msgStyle());
     this.msg.setOrigin(0.5);
-    this.vineT = (h.floorVine || h.drones || h.ninja?.shadowClone) ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // K special cooldown
+    this.vineT = (h.floorVine || h.drones || h.ninja?.shadowClone || h.ninja?.eclipseSlam) ? this.add.text(150, 42, '', { fontFamily: 'monospace', fontSize: '8px', color: '#7dff6a' }) : null;   // K special cooldown
     const buffs = (h.partyBuffs || []).map(b => this.add.text(6 + this.party.length * 70, 60, `${b.name.toUpperCase()} +${Math.round(b.atkPct * 100)}% ATK`,
       { fontFamily: 'monospace', fontSize: '8px', color: '#ffb46a', backgroundColor: '#0b0a18cc', padding: { x: 3, y: 1 } }));
     this.hud.add([g, por, name, this.subT, this.hpG, this.hpT, ...strip, ...buffs, this.msg, ...(this.vineT ? [this.vineT] : [])]);
@@ -358,6 +359,7 @@ class GameScene extends Phaser.Scene {
     this.subT.setText(`${h.faction} · ATK ${h.stats.atk}${h.stats.atk > h.stats.baseAtk ? '+' : ''} · CRIT ${Math.round(this.critChance() * 100)}%`);
     if (this.vineT && h.drones) { const cd = st.droneCd || 0, up = this.drones.length;
       this.vineT.setText(up ? `DRONES ${Math.max(0, this.drones[0].t).toFixed(1)}s` : cd > 0 ? `K DRONES ${cd.toFixed(1)}s` : 'K DRONES READY').setColor(up ? '#ffb46a' : cd > 0 ? '#7a6a5a' : '#9dff7a'); }
+    else if (this.vineT && h.ninja?.eclipseSlam) { const cd = st.slamCd || 0; this.vineT.setText(cd > 0 ? `K ECLIPSE ${cd.toFixed(1)}s` : 'K ECLIPSE READY').setColor(cd > 0 ? '#6a5a7a' : '#d08cff'); }
     else if (this.vineT && h.ninja) { const cd = st.cloneCd || 0; this.vineT.setText(cd > 0 ? `K CLONE ${cd.toFixed(1)}s` : 'K CLONE READY').setColor(cd > 0 ? '#6a5a7a' : '#c9a0ff'); }
     else if (this.vineT) { const cd = st.vineCd; this.vineT.setText(cd > 0 ? `K VINE ${cd.toFixed(1)}s` : 'K VINE READY').setColor(cd > 0 ? '#5f7f5a' : '#7dff6a'); }
   }
@@ -377,7 +379,9 @@ class GameScene extends Phaser.Scene {
   damageEnemy(e, o = {}) {
     if (!e.active || e.dying) return;
     const s = this.hero.stats, crit = Math.random() < this.critChance();
-    const dmg = Math.round(s.atk * s.baseDmgPct * (o.mult || 1) * (crit ? s.critDmg : 1) * Phaser.Math.FloatBetween(0.9, 1.1));
+    const markAmp = e.mark ? 1 + e.mark.M.perStack * e.mark.stacks : 1;   // Iron Crusade: Marked enemies take more damage from everyone
+    const dmg = Math.round(s.atk * s.baseDmgPct * (o.mult || 1) * (crit ? s.critDmg : 1) * markAmp * Phaser.Math.FloatBetween(0.9, 1.1));
+    if (markAmp > 1) this.markBonusDmg = (this.markBonusDmg || 0) + Math.round(dmg - dmg / markAmp);
     if (this.hero.momentum) this.st.momentum++;
     e.hp -= dmg; e.stun = o.stun ?? 0.25;
     const kb = o.knockback ?? this.hero.attack.knockback, dir = o.dir || this.st.facing;
@@ -388,6 +392,7 @@ class GameScene extends Phaser.Scene {
       e.play(`${e.pre}:hurt`, true); e.hurtT = 0.5;
     } else { e.anims.pause(); e.setFrame(2); }
     if (this.hero.burn) this.addBurn(e, crit ? 2 : 1);   // Mark VII: Burn on every hit, +1 stack on crit
+    if (this.hero.mark && !o.noMark && !o.quiet) this.addMark(e, o.marks || this.hero.mark.perHit || 1);   // Ingrid: Iron Crusade
     if (this.hero.poison && (o.poison || (!o.noToxicRoll && Math.random() < this.hero.poison.chance))) this.addPoison(e);   // Poison Ivy: Toxic
     const cy = this.cy(e);
     this.popText(e.x, cy - 26, (crit ? '⚡' : '') + dmg, crit ? '#ffe14a' : '#ffffff', crit ? 14 : 11);
@@ -400,7 +405,7 @@ class GameScene extends Phaser.Scene {
   }
   cy(e) { return e.body ? e.body.center.y : e.y; }   // enemy body centre (Hydra sprites are anchored at the feet)
   top(e) { return e.kind === 'hydra' ? e.y - this.E.sprite.body.height * e.scaleY : e.y - e.displayHeight / 2; }
-  castSpecial() { if (this.hero.floorVine) this.castVine(); else if (this.hero.drones) this.deployDrones(); else if (this.hero.ninja?.shadowClone) this.shadowClone(); }
+  castSpecial() { if (this.hero.floorVine) this.castVine(); else if (this.hero.drones) this.deployDrones(); else if (this.hero.ninja?.eclipseSlam) this.eclipseSlam(); else if (this.hero.ninja?.shadowClone) this.shadowClone(); }
   // ---- Poison Ivy: Thorn Eruption (K / X) — a thorny vine bursts from the floor under the nearest enemy in range ----
   groundAt(x) {   // nearest x with floor under it (the stage has two pits)
     const gaps = [[1100, 1180], [2080, 2170]];
@@ -539,6 +544,39 @@ class GameScene extends Phaser.Scene {
       if (e.hp <= 0) { this.killEnemy(e); return; }
     }
   }
+  // ---- Iron Crusade: Marked stacks (max 5, no expiry; the bonus applies to every party member's hits) ----
+  addMark(e, n = 1) {
+    if (!e.active || e.dying) return;
+    const M = this.hero.mark;
+    if (!e.mark) e.mark = { stacks: 0, M, g: this.add.graphics().setDepth(6), t: 0 };
+    const before = e.mark.stacks; e.mark.stacks = Math.min(M.max, e.mark.stacks + n);
+    this.marksApplied = (this.marksApplied || 0) + (e.mark.stacks - before);
+    if (e.mark.stacks > before) this.popText(e.x + 14, this.cy(e) - 46, e.mark.stacks >= M.max ? 'MARKED MAX' : `MARKED x${e.mark.stacks}`, '#d08cff', 8);
+    this.markSigil(e.x, this.cy(e) - 6, 1);
+  }
+  markSigil(x, y, flash) {   // purple eclipse sigil: ring + 4-point star, pops on every application
+    const g = this.add.graphics().setDepth(6.5), col = this.hero.mark?.color ?? 0xb04aff;
+    g.lineStyle(2, col, 1).strokeCircle(0, 0, 12); g.lineStyle(1, 0xf0d0ff, 1).strokeCircle(0, 0, 8);
+    g.fillStyle(col, 0.9); g.fillTriangle(0, -16, -3, 0, 3, 0); g.fillTriangle(0, 16, -3, 0, 3, 0); g.fillTriangle(-16, 0, 0, -3, 0, 3); g.fillTriangle(16, 0, 0, -3, 0, 3);
+    g.fillStyle(0x12061e, 1).fillCircle(0, 0, 4);
+    g.setPosition(x, y).setScale(0.6);
+    this.tweens.add({ targets: g, scale: flash ? 1.3 : 1, alpha: 0, angle: 45, duration: 420, ease: 'Cubic.easeOut', onComplete: () => g.destroy() });
+  }
+  updateMark(e, dt) {
+    const u = e.mark; if (!u) return;
+    u.t += dt;
+    // stack pips (purple, 5 slots) above the poison row + a small spinning sigil over the head while marked
+    const g = u.g, n = u.stacks, max = u.M.max, y = this.top(e) - 17, x0 = e.x - max * 2.5;
+    g.clear();
+    g.fillStyle(0x12061e, 0.9); for (let i = 0; i < max; i++) g.fillRect(x0 + i * 5 - 1, y - 1, 5, 5);
+    g.fillStyle(n >= max ? 0xf0b0ff : 0xb04aff); for (let i = 0; i < n; i++) g.fillRect(x0 + i * 5, y, 3, 3);
+    const r = 4 + n * 0.6, cx = e.x, cy = y - 7, a = u.t * 3;
+    g.lineStyle(1, 0xc77dff, 0.6 + 0.08 * n).strokeCircle(cx, cy, r);
+    g.fillStyle(0xe0b0ff, 0.9);
+    for (let k = 0; k < 4; k++) { const t = a + k * Math.PI / 2; g.fillRect(cx + Math.cos(t) * r - 1, cy + Math.sin(t) * r - 1, 2, 2); }
+    if (n >= max && Math.random() < dt * 6) this.sparks(e.x, this.cy(e) - 10, 0xb04aff, 1);
+  }
+  clearMark(e) { if (e.mark) e.mark.g.destroy(); e.mark = null; }
   clearPoison(e) { if (e.poison) { e.poison.pips.destroy(); if (e.poison.lbl) e.poison.lbl.destroy(); } e.poison = null; }
   thrusterFx(dt, flying) {
     const h = this.hero, p = this.player, st = this.st, f = st.facing;
@@ -556,7 +594,7 @@ class GameScene extends Phaser.Scene {
   }
 
   killEnemy(e) {
-    this.clearBurn(e); this.clearPoison(e);
+    this.clearBurn(e); this.clearPoison(e); this.clearMark(e);
     this.sparks(e.x, this.cy(e) - 8, 0xe055b0, 16);
     e.hpBar.destroy();
     this.kills = (this.kills || 0) + 1;
@@ -577,6 +615,14 @@ class GameScene extends Phaser.Scene {
   }
   hurtPlayer(dmg, srcX, kb = 1) {
     const st = this.st; if (st.invuln > 0 || st.dead || st.special || st.won || st.iframeT > 0) return false;
+    if (st.armorT > 0) {   // super-armor (Ingrid's charge strike / eclipse slam): takes the damage, no flinch, no knockback, move continues
+      st.hp -= dmg; st.invuln = 0.5; this.armorHits = (this.armorHits || 0) + 1;
+      this.player.setTintFill(0xd08cff); this.time.delayedCall(60, () => this.player.clearTint());
+      this.popText(this.player.x, this.player.y - 160, '-' + dmg + ' ARMOR', '#d08cff', 11);
+      this.dmgTaken = (this.dmgTaken || 0) + dmg;
+      if (st.hp <= 0) this.die();
+      return true;
+    }
     if (st.nj) this.ninjaReset();
     st.hp -= dmg; st.invuln = 1.0; st.hurtT = 0.32; st.attacking = false; this.player.setFlipX(st.facing < 0);
     const d = this.player.x < srcX ? -1 : 1;
@@ -854,7 +900,7 @@ class GameScene extends Phaser.Scene {
   ninjaReset() {
     const st = this.st; if (!st) return;
     st.nj = { mode: null, chain: 0, queued: false, airJumps: 0, airDashes: 0, slashes: 0, dashT: 0, dashCd: 0, dashDir: 1, ghostT: 0, afterDash: 0, line: null };
-    st.iframeT = 0; st.attacking = false;
+    st.iframeT = 0; st.armorT = 0; st.attacking = false;
     if (this.player && this.player.body) { this.player.body.setAllowGravity(!this.hero.flight); this.player.anims.timeScale = 1; }
   }
   ninjaGhost(alpha = 0.55, ms = 220) {
@@ -905,13 +951,17 @@ class GameScene extends Phaser.Scene {
     if (N.mode === 'combo' && name === NJ.combo.hits[N.chain].anim) {
       const H = NJ.combo.hits[N.chain];
       if (act.includes(i)) {
-        if (i === act[0]) this.slashArc(p.x + st.facing * 46, p.y - 82, st.facing, 54, 70 + N.chain * 10, N.chain === 3 ? 0x7fd8ff : 0xdff8ff);
+        const heavy = !!h.mark, fin = N.chain === NJ.combo.hits.length - 1;
+        if (i === act[0]) this.slashArc(p.x + st.facing * (heavy ? 60 : 46), p.y - 82, st.facing, heavy ? 72 : 54, (heavy ? 90 : 70) + N.chain * 12,
+          heavy ? (fin ? 0xd08cff : 0xb04aff) : N.chain === 3 ? 0x7fd8ff : 0xdff8ff, heavy ? 200 : 140);
+        if (i === act[0] && heavy && fin) { this.cameras.main.shake(120, 0.006); this.sparks(p.x + st.facing * 120, GROUND_Y - 4, 0xb04aff, 14); }
         if (an.hitPerActiveFrame) st.hitSet = new Set();
-        this.ninjaStrike(this.ninjaHitRect(H.reach, H.height), H);
+        this.ninjaStrike(this.ninjaHitRect(H.reach, H.height), H, H.marks ? { marks: H.marks } : {});
       }
       // cancel window: after the last active frame a buffered J chains straight into the next hit
       if (i > act[act.length - 1] && N.queued && N.chain < NJ.combo.hits.length - 1) this.startCombo(N.chain + 1);
-    } else if (N.mode === 'air' && name === NJ.airSlash.anim && act.includes(i)) {
+    } else if (N.mode === 'special' && NJ.eclipseSlam && name === NJ.eclipseSlam.anim && i === act[0]) this.eclipseImpact();
+    else if (N.mode === 'air' && NJ.airSlash && name === NJ.airSlash.anim && act.includes(i)) {
       if (i === act[0]) this.slashArc(p.x + st.facing * 40, p.y - 80, st.facing, 66, 96, 0xbff4ff, 180);
       this.ninjaStrike(this.ninjaHitRect(NJ.airSlash.reach, NJ.airSlash.height, 30), NJ.airSlash);
     } else if (N.mode === 'dashatk' && name === NJ.dashAttack.anim && i === act[0] && !N.line) this.dashCutGo();
@@ -921,8 +971,9 @@ class GameScene extends Phaser.Scene {
     if (N.mode === 'combo' && name === NJ.combo.hits[N.chain].anim) {
       if (N.queued && N.chain < NJ.combo.hits.length - 1) this.startCombo(N.chain + 1);
       else { const c = N.chain; this.ninjaEnd(); N.chainWindow = c < NJ.combo.hits.length - 1 ? NJ.combo.bufferMs / 1000 : 0; N.nextHit = c + 1; }
-    } else if (N.mode === 'air' && name === NJ.airSlash.anim) this.ninjaEnd();
-    else if (N.mode === 'dashatk' && name === NJ.dashAttack.anim) this.ninjaEnd();
+    } else if (N.mode === 'air' && NJ.airSlash && name === NJ.airSlash.anim) this.ninjaEnd();
+    else if (N.mode === 'special' && NJ.eclipseSlam && name === NJ.eclipseSlam.anim) { this.ninjaEnd(); this.st.armorT = 0; }
+    else if (N.mode === 'dashatk' && name === NJ.dashAttack.anim) { this.ninjaEnd(); this.st.armorT = 0; }
     else if (N.mode === 'flip' && name === NJ.doubleJump.anim) N.mode = null;
   }
   startDash(dir) {
@@ -932,6 +983,53 @@ class GameScene extends Phaser.Scene {
     p.body.setAllowGravity(false); p.body.setMaxVelocity(D.speed + 20, 900); p.setVelocity(dir * D.speed, 0);
     this.dashes = (this.dashes || 0) + 1;
     this.sparks(p.x - dir * 10, p.y - 6, 0x9fe8ff, 6);
+  }
+  // Ingrid: the dash IS the attack — a short (160 px) super-armored charge that cuts everything on the line (no i-frames, no air dash)
+  startChargeStrike(dir) {
+    const D = this.hero.ninja.dash, st = this.st, N = st.nj;
+    st.facing = dir; N.dashDir = dir; N.dashCd = D.cooldownMs / 1000; this.dashes = (this.dashes || 0) + 1;
+    this.startDashCut(); st.iframeT = 0; if (D.superArmor) st.armorT = 2;   // cleared when the strike anim ends
+    this.player.setTintFill(0xd08cff); this.time.delayedCall(70, () => this.player.clearTint());
+  }
+  // Ingrid: Eclipse Slam (K / X) — sword raised under a black sun, then plunged into the floor: purple-flame ring hits everything around her and adds Marked
+  eclipseSlam() {
+    const S = this.hero.ninja.eclipseSlam, st = this.st, p = this.player;
+    if (st.dead || st.won || st.special || (st.slamCd || 0) > 0 || st.hurtT > 0 || !st.nj || st.nj.mode === 'special') return;
+    if (!(p.body.blocked.down || p.body.touching.down)) return;
+    this.ninjaEnd(); st.slamCd = S.cooldownMs / 1000; this.slamCasts = (this.slamCasts || 0) + 1;
+    this.ninjaPlay(S.anim, 'special'); p.setVelocity(0, 0); if (S.superArmor) st.armorT = 5;
+    // the eclipse: a black disc with a purple corona over her head while she charges
+    const ex = p.x, ey = p.y - 190, g = this.add.graphics().setDepth(4.5);
+    g.fillStyle(0xb04aff, 0.35).fillCircle(0, 0, 30); g.fillStyle(0xd08cff, 0.5).fillCircle(0, 0, 24); g.fillStyle(0x0a0410, 1).fillCircle(0, 0, 20);
+    g.lineStyle(1, 0xf0d0ff, 0.9).strokeCircle(0, 0, 21);
+    g.setPosition(ex, ey).setScale(0.2).setAlpha(0);
+    this.tweens.add({ targets: g, scale: 1, alpha: 1, duration: 500, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: g, alpha: 0, scale: 1.4, delay: 1150, duration: 350, onComplete: () => g.destroy() });
+    this.eclipseG = g;
+  }
+  eclipseImpact() {
+    const S = this.hero.ninja.eclipseSlam, st = this.st, p = this.player, gy = Math.min(GROUND_Y, p.y);
+    st.hitSet = new Set(); let n = 0;
+    this.enemies.getChildren().forEach(e => {
+      if (!e.active || e.dying || !e.body || Math.abs(e.x - p.x) > S.radiusPx || Math.abs(this.cy(e) - (gy - 60)) > 200) return;
+      const dir = Math.sign(e.x - p.x) || st.facing; n++;
+      this.damageEnemy(e, { mult: S.mult, stun: S.stun, knockback: S.knockback, dir, hitstopMs: n === 1 ? S.hitstopMs : 12, marks: S.marks });
+      if (e.active && e.body && e.kind === 'hydra' && S.launch) e.setVelocityY(-S.launch);
+    });
+    this.slamHits = (this.slamHits || 0) + n;
+    // purple-flame ring along the floor + a shock column on the blade
+    const ring = this.add.graphics().setDepth(6);
+    ring.fillStyle(0x7a1ad0, 0.35).fillEllipse(0, 0, 60, 14); ring.lineStyle(5, 0xb04aff, 1).strokeEllipse(0, 0, 60, 14);
+    ring.lineStyle(2, 0xf0d0ff, 1).strokeEllipse(0, 0, 54, 11);
+    const col = this.add.graphics().setDepth(6);   // purple-flame shock column where the blade went in
+    col.fillStyle(0xb04aff, 0.55).fillRect(-7, -150, 14, 150); col.fillStyle(0xf0d0ff, 0.9).fillRect(-2, -150, 4, 150);
+    col.setPosition(p.x + st.facing * 30, gy);
+    this.tweens.add({ targets: col, scaleX: 3, alpha: 0, duration: 380, ease: 'Cubic.easeOut', onComplete: () => col.destroy() });
+    ring.setPosition(p.x, gy - 2);
+    this.tweens.add({ targets: ring, scaleX: S.radiusPx * 2 / 60, scaleY: 2.2, alpha: 0, duration: 520, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    for (let k = -4; k <= 4; k++) this.time.delayedCall(Math.abs(k) * 35, () => this.sparks(p.x + k * S.radiusPx / 4.5, gy - 6, k % 2 ? 0xb04aff : 0x2a0a3a, 6));
+    this.markSigil(p.x, gy - 8, 1);
+    this.cameras.main.shake(220, 0.012); this.cameras.main.flash(90, 120, 40, 160);
   }
   startDashCut() {   // J during (or right after) a dash: one iaido cut that pierces every enemy on a line
     const st = this.st, N = st.nj, p = this.player, DA = this.hero.ninja.dashAttack;
@@ -954,7 +1052,7 @@ class GameScene extends Phaser.Scene {
       L.done = true; p.setVelocityX(L.dir * 60); p.body.setMaxVelocity(520, 900);
       // the line flashes, then every enemy she passed through is cut at once (staggered by a few ms)
       const y = p.y - 70, g = this.add.graphics().setDepth(6);
-      g.fillStyle(0xffffff, 1).fillRect(xa - 20, y - 1, xb - xa + 40, 2); g.fillStyle(0x7fd8ff, 0.6).fillRect(xa - 20, y - 3, xb - xa + 40, 6);
+      g.fillStyle(0xffffff, 1).fillRect(xa - 20, y - 1, xb - xa + 40, 2); g.fillStyle(this.hero.mark ? 0xb04aff : 0x7fd8ff, 0.6).fillRect(xa - 20, y - 3, xb - xa + 40, 6);
       this.tweens.add({ targets: g, alpha: 0, duration: 260, delay: 60, onComplete: () => g.destroy() });
       L.hit.forEach((e, k) => this.time.delayedCall(70 + k * 45, () => {
         if (!e.active || e.dying) return;
@@ -1002,13 +1100,17 @@ class GameScene extends Phaser.Scene {
   updateNinja(dt, time, onGround, left, right, jumpPressed, atkPressed, running) {
     const p = this.player, st = this.st, h = this.hero, NJ = h.ninja, N = st.nj, K = this.keys;
     N.dashCd = Math.max(0, N.dashCd - dt); st.iframeT = Math.max(0, (st.iframeT || 0) - dt); st.cloneCd = Math.max(0, (st.cloneCd || 0) - dt);
+    st.slamCd = Math.max(0, (st.slamCd || 0) - dt); st.armorT = Math.max(0, (st.armorT || 0) - dt);
+    if (N.mode === 'special') { p.setVelocityX(0); return; }
     N.afterDash = Math.max(0, N.afterDash - dt); N.chainWindow = Math.max(0, (N.chainWindow || 0) - dt); this.buf.dash = Math.max(0, this.buf.dash - dt);
     if (onGround) { N.airJumps = NJ.doubleJump.airJumps; N.airDashes = NJ.dash.airDashes; N.slashes = 0; }
     if (N.mode === 'clone') return;
     let dir = (right ? 1 : 0) - (left ? 1 : 0);
     // ---- dash (L / C): burst of speed with i-frames + afterimages; J during it = dash cut ----
     if (this.buf.dash > 0 && N.dashCd <= 0 && N.mode !== 'dash' && N.mode !== 'dashatk' && (onGround || N.airDashes > 0)) {
-      this.buf.dash = 0; if (!onGround) N.airDashes--; this.startDash(dir || st.facing); return;
+      this.buf.dash = 0; if (!onGround) N.airDashes--;
+      if (NJ.dash.mode === 'strike') { this.startChargeStrike(dir || st.facing); return; }
+      this.startDash(dir || st.facing); return;
     }
     if (N.mode === 'dash') {
       N.dashT -= dt; N.ghostT -= dt;
@@ -1023,7 +1125,7 @@ class GameScene extends Phaser.Scene {
     if (atkPressed) {
       if (N.afterDash > 0 && !N.mode) { this.buf.atk = 0; this.startDashCut(); return; }
       if (N.mode === 'combo') { N.queued = true; this.buf.atk = 0; }
-      else if (!onGround && (!N.mode || N.mode === 'flip') && N.slashes < NJ.airSlash.perJump) {
+      else if (!onGround && NJ.airSlash && (!N.mode || N.mode === 'flip') && N.slashes < NJ.airSlash.perJump) {
         this.buf.atk = 0; N.slashes++; this.ninjaPlay(NJ.airSlash.anim, 'air'); this.airSlashes = (this.airSlashes || 0) + 1;
         if (p.body.velocity.y > -NJ.airSlash.hop) p.setVelocityY(-NJ.airSlash.hop);   // small hang-time hop
       } else if (onGround && !N.mode) { this.buf.atk = 0; this.startCombo(N.chainWindow > 0 ? N.nextHit : 0); N.chainWindow = 0; }
@@ -1054,8 +1156,12 @@ class GameScene extends Phaser.Scene {
     st.wasGround = onGround; st.landT = Math.max(0, st.landT - dt);
     if (N.mode === 'air' || N.mode === 'flip') return;
     const jt = `${h.key}_jump`;
-    if (st.jumpT > 0 || st.landT > 0) { p.anims.stop(); p.setTexture(jt, 1); return; }
-    if (!onGround) { p.anims.stop(); p.setTexture(jt, p.body.velocity.y < 60 ? 0 : 1); return; }
+    if (NJ.noAirMoves) {   // idle-game hero set (no jump/flip art): hold the first idle frame while airborne
+      if (!onGround) { p.anims.stop(); p.setTexture(`${h.key}_idle`, 0); return; }
+    } else {
+      if (st.jumpT > 0 || st.landT > 0) { p.anims.stop(); p.setTexture(jt, 1); return; }
+      if (!onGround) { p.anims.stop(); p.setTexture(jt, p.body.velocity.y < 60 ? 0 : 1); return; }
+    }
     const vx = Math.abs(p.body.velocity.x);
     if (vx > (h.move.walkSpeed + h.move.runSpeed) / 2 - 5) this.playLoop('run', vx / h.move.runSpeed);
     else if (vx > 12) this.playLoop('walk', vx / h.move.walkSpeed);
@@ -1073,6 +1179,7 @@ class GameScene extends Phaser.Scene {
     const p = this.player, T = e.T, st = this.st;
     this.updateBurn(e, dt); if (!e.active || e.dying) return;
     this.updatePoison(e, dt); if (!e.active || e.dying) return;
+    this.updateMark(e, dt);
     e.cd -= dt; e.hurtT = Math.max(0, e.hurtT - dt);
     const onGround = e.body.blocked.down || e.body.touching.down;
     const dx = p.x - e.x, adx = Math.abs(dx), alive = !st.dead && !st.special && !st.won;
@@ -1135,6 +1242,7 @@ class GameScene extends Phaser.Scene {
       if (e.kind === 'hydra') { this.updateHydra(e, dt); return; }
       this.updateBurn(e, dt); if (!e.active || !e.body) return;
       this.updatePoison(e, dt); if (!e.active || !e.body) return;
+      this.updateMark(e, dt);
       if (e.stun <= 0 && !e.anims.isPlaying) e.anims.resume?.() || e.play(e.kind === 'oni' ? 'oni_walk' : 'drone_fly');
       if (e.stun <= 0) {
         if (e.kind === 'oni') {

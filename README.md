@@ -12,8 +12,9 @@ This is a 16-bit multiverse side-scroller prototype built with Phaser 3 (vendore
 | Space / W / ↑ | jump (hold to jump higher) |
 | J / Z | attack (Asagi: katana · Flash: rapid punch combo · Iron Man: hold to fire repulsors, alternating hands · Poison Ivy: vine whip · Robot: arm blaster) |
 | K / X | Poison Ivy: Thorn Eruption, a thorny vine bursts out of the floor under the nearest enemy (3.5 s cooldown) · Robot: Drone Support, 2 drones laser the nearest enemy for 5 s (10 s cooldown) |
-| Tab or 1 / 2 / 3 / 4 / 5 / 6 | tag-swap hero in place (each keeps own HP) |
+| Tab or 1 / 2 / 3 / 4 / 5 / 6 / 7 | tag-swap hero in place (each keeps own HP) |
 | Sakura (ninja) | Space in the air: front-flip double jump · **L or C**: dash (i-frames, afterimages, also once in the air) |
+| Ingrid (heavy) | J/Z: slow 3-hit gold-sword combo · **L or C**: super-armor charge strike (takes damage, can't be interrupted) · **K/X**: Eclipse Slam AoE · every hit adds Marked |
 | Iron Man | arrows / WASD fly 8-way · Space / Shift boost · no gravity while he's active |
 | F | Flashpoint special: portal, fade, stage restarts (rebirth prototype) |
 | R | restart |
@@ -22,6 +23,8 @@ Start as The Flash: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Fl
 Start as Iron Man: https://ngtrooper.github.io/multiverse-sidescroller/?hero=IronMan
 Start as Poison Ivy: https://ngtrooper.github.io/multiverse-sidescroller/?hero=PoisonIvy
 Start as Robot: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Robot
+Start as Sakura: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Sakura
+Start as Ingrid: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Ingrid
 
 ## What's in this build
 - One test stage with parallax, one-way platforms, gaps, Hydra gunners and drone enemies, an HP HUD and crits.
@@ -52,6 +55,11 @@ Start as Robot: https://ngtrooper.github.io/multiverse-sidescroller/?hero=Robot
   - Combo (tap J/Z): 4 hits at 85/95/110/160% ATK. Press during a hit or within 0.26s after to chain; the finisher launches grunts.
   - Air slash (J/Z in the air): one per jump, with a small hop. Dash (L or C): 560px/s with i-frames and afterimages. Dash cut (J/Z during a dash): she streaks 260px and every enemy in the line is cut as she sheathes.
   - Shadow Clone (K/X): she vanishes, up to 3 shadow clones slash the nearest enemies, and she blinks in behind the last one. 6s cooldown.
+- **Ingrid (Action Taimanin)** is the seventh hero: a heavy variant of the ninja kit with **no air moves**. Heroes Idle is an idle game, so new heroes get only idle, run, attacks and hurt (no jump art). Her sprites use the same video pipeline: idle, a heavy run, a slow 3-hit two-handed gold-sword combo, a charge strike, the Eclipse Slam and a hurt flinch.
+  - Combo (tap J/Z): 3 hits at 100/115/190% ATK with big purple-flame arcs. The finisher launches grunts and adds 2 Marked.
+  - Charge strike (L or C): a short lunge-sweep that cuts every enemy in a ~200px line for 160% ATK. **Super-armor**: she takes the damage but can't be flinched or interrupted. 0.9s cooldown.
+  - Eclipse Slam (K/X): a black eclipse rises over her and she plunges the sword into the floor. A purple flame ring hits everything within 190px for 220% ATK + 2 Marked, with super-armor through the cast. 7s cooldown.
+  - Iron Crusade: every hit adds a **Marked** stack (purple pips and a sigil over the enemy). Each stack makes that enemy take +3% damage from the whole party, up to 5 stacks (+15%).
 - **Hydra Grunts** replace the old placeholder oni and are the first ranged enemies. They march in, stop 250–300px away and fire 3-round bursts of slow green energy bolts from their rifles. Jump over the bolts, back out of range, or fly over them as Iron Man. Sprites come from the same video pipeline (idle, walk, rifle burst, hurt, death).
   - **Hydra Elite** is a crimson palette swap with 2× HP, harder-hitting faster bolts and a shorter reload. Two of them guard the second half of the stage.
   - The stage has 4 Grunts, 2 Elites and 6 drones. Enemy numbers live in `data/enemies.json`.

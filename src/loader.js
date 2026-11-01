@@ -21,7 +21,7 @@ window.CharacterLoader = {
         sprite: { dir: entry.sprite.meta.replace(/[^/]*$/, ''), scale: entry.sprite.scale || 1, body: entry.sprite.body, attackArtFacesLeft: !!entry.sprite.attackArtFacesLeft,
           muzzle: entry.sprite.muzzle, muzzleAlt: entry.sprite.muzzleAlt, jets: entry.sprite.jets, meta },
         move: entry.move, attack: entry.attack, fx: entry.fx, ui: entry.ui, momentum: entry.momentum,
-        flight: entry.flight, ranged: entry.ranged, burn: entry.burn, poison: entry.poison, drones: entry.drones, partyBuff: entry.partyBuff, ninja: entry.ninja,
+        flight: entry.flight, ranged: entry.ranged, burn: entry.burn, poison: entry.poison, drones: entry.drones, partyBuff: entry.partyBuff, ninja: entry.ninja, mark: entry.mark,
         floorVine: entry.floorVine ? { ...entry.floorVine, dir: entry.floorVine.meta.replace(/[^/]*$/, ''), meta: await j(entry.floorVine.meta) } : undefined,
       };
     }));
